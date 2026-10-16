@@ -21,7 +21,10 @@ To keep a release local for now: `make commit M="..."` (no push), then `make pus
 Day-to-day testing never needs this repo: the source in `~/.claude/mods/<name>` is the installed
 copy on this machine, so edit it and run `/reload-plugins`.
 
-`make` alone lists every target (`validate`, `readme`, `check`, `stage`, `form`, `commit`,
+`make status` shows each plugin as `released` or `changed` since its last stage. In Claude Code,
+the `plugin-release` skill asks whether (and how) to release after a change.
+
+`make` alone lists every target (`validate`, `status`, `readme`, `check`, `stage`, `form`, `commit`,
 `push`, `ship`). The
 Makefile wraps `~/.claude/skills/marketplace-publish/scripts/publish.py`; `NAME` is looked up in
 `~/.claude/mods/` then `~/.claude/skills/`.

@@ -4,13 +4,16 @@ P := $(HOME)/.claude/skills/marketplace-publish/scripts/publish.py
 # a plugin's source: a mod in ~/.claude/mods, else a skill in ~/.claude/skills
 SRC = $(firstword $(wildcard $(HOME)/.claude/mods/$(NAME) $(HOME)/.claude/skills/$(NAME)))
 
-.PHONY: help validate readme check stage form commit push ship _src
+.PHONY: help validate status readme check stage form commit push ship _src
 
 help: ## list the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
 
 validate: ## validate the marketplace and every plugin in it
 	claude plugin validate .
+
+status: ## each plugin: version, released or changed since, source
+	@python3 "$(P)" status --repo .
 
 readme: ## regenerate the README plugins table from marketplace.json
 	python3 "$(P)" readme --repo .
