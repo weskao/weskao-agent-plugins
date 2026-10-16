@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=\"$HOME/.claude/skills/marketplace-publish/scripts/publish.py\"; grep -q 'marketplace\\.json' && [ -f \"$p\" ] && python3 \"$p\" readme --repo \"$CLAUDE_PROJECT_DIR\"; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

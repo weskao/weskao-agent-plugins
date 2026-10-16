@@ -1,0 +1,32 @@
+# Maintainer shortcuts over marketplace-publish (CLAUDE.md has the workflow). Only `validate` works without
+# ~/.claude: plugins/<name>/ is generated from a source there, so the rest need that machine.
+P := $(HOME)/.claude/skills/marketplace-publish/scripts/publish.py
+# a plugin's source: a mod in ~/.claude/mods, else a skill in ~/.claude/skills
+SRC = $(firstword $(wildcard $(HOME)/.claude/mods/$(NAME) $(HOME)/.claude/skills/$(NAME)))
+
+.PHONY: help validate readme check stage form ship _src
+
+help: ## list the targets
+	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
+
+validate: ## validate the marketplace and every plugin in it
+	claude plugin validate .
+
+readme: ## regenerate the README plugins table from marketplace.json
+	python3 "$(P)" readme --repo .
+
+check: _src ## run every publish check on a source: make check NAME=prompt-toc
+	python3 "$(P)" check "$(SRC)"
+
+stage: _src ## copy a source in: make stage NAME=prompt-toc [BUMP=patch|minor|major]
+	python3 "$(P)" stage "$(SRC)" --repo . $(if $(BUMP),--bump $(BUMP))
+
+form: ## print the plugin directory form values: make form NAME=prompt-toc
+	python3 "$(P)" form "$(NAME)" --repo .
+
+ship: ## commit and push (public repo): make ship M="fix(prompt-toc): ..."
+	@test -n "$(M)" || { echo 'usage: make ship M="<commit message>"'; exit 1; }
+	python3 "$(P)" ship -m "$(M)" --repo .
+
+_src:
+	@test -n "$(SRC)" || { echo "no source for NAME=$(NAME) in ~/.claude/mods or ~/.claude/skills"; exit 1; }
