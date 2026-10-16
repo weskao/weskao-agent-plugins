@@ -16,7 +16,13 @@ make stage NAME=<name> BUMP=patch     # check, copy here, update marketplace.jso
 make ship M="fix(<name>): ..."        # commit + push (public repo: ask the user first)
 ```
 
-`make` alone lists every target (`validate`, `readme`, `check`, `stage`, `form`, `ship`). The
+To keep a release local for now: `make commit M="..."` (no push), then `make push` when ready.
+
+Day-to-day testing never needs this repo: the source in `~/.claude/mods/<name>` is the installed
+copy on this machine, so edit it and run `/reload-plugins`.
+
+`make` alone lists every target (`validate`, `readme`, `check`, `stage`, `form`, `commit`,
+`push`, `ship`). The
 Makefile wraps `~/.claude/skills/marketplace-publish/scripts/publish.py`; `NAME` is looked up in
 `~/.claude/mods/` then `~/.claude/skills/`.
 

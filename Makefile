@@ -4,7 +4,7 @@ P := $(HOME)/.claude/skills/marketplace-publish/scripts/publish.py
 # a plugin's source: a mod in ~/.claude/mods, else a skill in ~/.claude/skills
 SRC = $(firstword $(wildcard $(HOME)/.claude/mods/$(NAME) $(HOME)/.claude/skills/$(NAME)))
 
-.PHONY: help validate readme check stage form ship _src
+.PHONY: help validate readme check stage form commit push ship _src
 
 help: ## list the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -23,6 +23,13 @@ stage: _src ## copy a source in: make stage NAME=prompt-toc [BUMP=patch|minor|ma
 
 form: ## print the plugin directory form values: make form NAME=prompt-toc
 	python3 "$(P)" form "$(NAME)" --repo .
+
+commit: ## commit locally, no push: make commit M="fix(prompt-toc): ..."
+	@test -n "$(M)" || { echo 'usage: make commit M="<commit message>"'; exit 1; }
+	git add -A && git commit -m "$(M)"
+
+push: ## push local commits (safe-push: fetch first, never force)
+	python3 "$(HOME)/.claude/skills/safe-git-push/scripts/safe_push.py"
 
 ship: ## commit and push (public repo): make ship M="fix(prompt-toc): ..."
 	@test -n "$(M)" || { echo 'usage: make ship M="<commit message>"'; exit 1; }
