@@ -127,12 +127,12 @@ test('the settings popover is absolute under the gear and adds no rows to the he
   // a popover that leaked its 2 toggle rows into the math would overflow it and bring the chip up
   const ui = await mountPane($, { offset: 0, bodyRows: 39 })
   expect(await ui.find({ type: 'Button', text: /end/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
   await ui.press({ key: 'settings-toggle' })
   expect(await ui.find({ type: 'Button', text: /end/ })).toBeUndefined()
   const pop = (await ui.findAll({ type: 'Box' })).find(b => b.props.position === 'absolute' && b.props.top === 1)
   expect(pop?.props.right).toBe(0)
-  expect(pop?.text).toContain('show time')
+  expect(pop?.text).toContain('Show time')
 })
 
 test('All and Prompts are padded to one width, so each press range is as wide as the longer label', async ($, on) => {
@@ -168,7 +168,7 @@ test('the accent colour marks the active view, the open settings and a checked t
 
   await ui.press({ key: 'settings-toggle' })
   expect(await pill(ui, /Settings/)).toHaveLength(1)
-  // show time is on by default: its [x] carries the accent, the unchecked open-on-start [ ] does not
-  expect(await accented(ui, /\[x\]/)).toHaveLength(1)
+  // every setting is on by default: each [x] carries the accent, and no [ ] is drawn to carry it
+  expect(await accented(ui, /\[x\]/)).toHaveLength(2)
   expect(await accented(ui, /\[ \]/)).toHaveLength(0)
 })

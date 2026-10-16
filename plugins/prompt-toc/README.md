@@ -22,7 +22,7 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 In the pane:
 
 - **All / Prompts** switch: show reply headings too, or only your prompts.
-- **⚙ settings**: *open pane on start* (wide terminals only) and *show time* (the time of each prompt). Both are also `/config` rows, synced both ways.
+- **⚙ settings**: *Open pane on start* (wide terminals only) and *Show time* (the time of each prompt), both on by default. Both are also `/config` rows, synced both ways.
 - The row in view is underlined as you scroll, and a `/compact` divider can hide or show the rows above it.
 
 ## Privacy

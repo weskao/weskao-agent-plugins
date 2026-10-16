@@ -1,20 +1,25 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULTS, loadSettings, toggleSetting } from './settings'
+import { DEFAULTS, KEYS, LABELS, loadSettings, toggleSetting } from './settings'
 
-test('absent store keys fall back to the defaults (show-time on, open-on-start off)', () => {
-  expect(loadSettings(() => undefined)).toEqual({ showTime: true, openByDefault: false })
-  expect(DEFAULTS).toEqual({ showTime: true, openByDefault: false })
+test('absent store keys fall back to the defaults (every setting on)', () => {
+  expect(loadSettings(() => undefined)).toEqual({ showTime: true, openByDefault: true })
+  expect(DEFAULTS).toEqual({ showTime: true, openByDefault: true })
 })
 
 test('stored booleans override the defaults, one key per setting', () => {
-  const store: Record<string, unknown> = { showTime: false, openByDefault: true }
-  expect(loadSettings(k => store[k])).toEqual({ showTime: false, openByDefault: true })
-  expect(loadSettings(k => (k === 'openByDefault' ? true : undefined))).toEqual({ showTime: true, openByDefault: true })
+  const store: Record<string, unknown> = { showTime: false, openByDefault: false }
+  expect(loadSettings(k => store[k])).toEqual({ showTime: false, openByDefault: false })
+  expect(loadSettings(k => (k === 'openByDefault' ? false : undefined))).toEqual({ showTime: true, openByDefault: false })
 })
 
 test('a non-boolean stored value is ignored', () => {
   expect(loadSettings(() => 'false')).toEqual(DEFAULTS)
+})
+
+test('every popover item is labelled with a capital first letter, in drawing order', () => {
+  expect(KEYS).toEqual(['openByDefault', 'showTime'])
+  for (const k of KEYS) expect(LABELS[k][0]).toBe(LABELS[k][0].toUpperCase())
 })
 
 test('toggleSetting flips one key and returns a new object', () => {

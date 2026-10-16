@@ -16,7 +16,7 @@ Mods need Claude Code 2.1.287 or later.
 <!-- plugins:start -->
 | Plugin | Version | What it does | Install |
 | --- | --- | --- | --- |
-| [`prompt-toc`](./plugins/prompt-toc) | 0.1.0 | Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (open on start, show time), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export | `claude plugin install prompt-toc@weskao-plugins` |
+| [`prompt-toc`](./plugins/prompt-toc) | 0.2.0 | Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (open on start, show time), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export | `claude plugin install prompt-toc@weskao-plugins` |
 <!-- plugins:end -->
 
 ## License

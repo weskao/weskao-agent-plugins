@@ -116,7 +116,8 @@ test('open by default ON opens the pane once, unfocused, titled with the pane id
   expect(opens).toHaveLength(1)
 })
 
-test('open by default OFF (stored false or absent) opens nothing', async ($, on) => {
+// absent means ON now (every setting defaults on), so OFF is only a stored false
+test('open by default OFF (stored false) opens nothing', { options: { openByDefault: false } }, async ($, on) => {
   const { opens, start } = await boot($, on, {})
   await start()
   await settle()

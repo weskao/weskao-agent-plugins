@@ -56,12 +56,12 @@ test('draws a prompt time by default and hides it once "show time" is toggled of
 
   const ui = await mountPane($)
   expect(await ui.find({ type: 'Text', text: t(T0) })).toBeDefined()
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 
   await ui.press({ key: 'settings-toggle' })
-  expect(await ui.find({ type: 'Button', text: /\[x\] show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /\[x\] Show time/ })).toBeDefined()
   await ui.press({ key: 'setting-showTime' })
-  expect(await ui.find({ type: 'Button', text: /\[ \] show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /\[ \] Show time/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: t(T0) })).toBeUndefined()
   expect(sets['prompt-toc.showTime']).toBe(false)
   await ui.press({ key: 'setting-showTime' })
@@ -123,7 +123,7 @@ test('a rescan keeps a prompt\'s live time and gives the transcript\'s only to r
   expect(await ui.find({ type: 'Text', text: t(T0 - 60_000) })).toBeDefined()
 })
 
-test('"open pane on start" is drawn above "show time", starts OFF and mirrors to /config', async ($, on) => {
+test('"Open pane on start" is drawn above "Show time", starts ON and mirrors to /config', async ($, on) => {
   mock.session(on)
   store(on)
   const sets = config(on)
@@ -133,15 +133,15 @@ test('"open pane on start" is drawn above "show time", starts OFF and mirrors to
   const ui = await mountPane($)
   await ui.press({ key: 'settings-toggle' })
   const labels = (await ui.findAll({ type: 'Button', text: /\[[ x]\] / })).map(b => String((b as { text?: string }).text ?? ''))
-  expect(await ui.find({ type: 'Button', text: /\[ \] open pane on start/ })).toBeDefined()
-  expect(await ui.find({ type: 'Button', text: /\[x\] show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /\[x\] Open pane on start/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /\[x\] Show time/ })).toBeDefined()
   expect(labels.length).toBe(2)
-  expect(labels[0]).toMatch(/open pane on start/)
+  expect(labels[0]).toMatch(/Open pane on start/)
   expect('prompt-toc.openByDefault' in sets).toBe(false)
 
   await ui.press({ key: 'setting-openByDefault' })
-  expect(await ui.find({ type: 'Button', text: /\[x\] open pane on start/ })).toBeDefined()
-  expect(sets['prompt-toc.openByDefault']).toBe(true)
+  expect(await ui.find({ type: 'Button', text: /\[ \] Open pane on start/ })).toBeDefined()
+  expect(sets['prompt-toc.openByDefault']).toBe(false)
 })
 
 test('the gear carries the "Settings" word, and every popover item is padded to one width so its whole row presses', async ($, on) => {
@@ -153,8 +153,8 @@ test('the gear carries the "Settings" word, and every popover item is padded to 
 
   await ui.press({ key: 'settings-toggle' })
   const widths = [
-    (await ui.find({ type: 'Button', text: /open pane on start/ }))?.text,
-    (await ui.find({ type: 'Button', text: /show time/ }))?.text,
+    (await ui.find({ type: 'Button', text: /Open pane on start/ }))?.text,
+    (await ui.find({ type: 'Button', text: /Show time/ }))?.text,
   ].map(label => String(label).length)
   expect(widths[1]).toBeGreaterThan(20)
   expect(widths[0]).toBe(widths[1])
@@ -171,15 +171,15 @@ test('the settings popover closes on a press elsewhere or when focus leaves the 
 
   await ui.press({ key: 'settings-toggle' })
   await ui.press({ key: 'setting-showTime' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeDefined()
 
   await ui.press({ key: 'toc-0' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 
   await ui.press({ key: 'settings-toggle' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeDefined()
   await ui.press({ key: 'settings-toggle' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 })
 
 test('the settings popover closes when the keyboard leaves the pane (a click in the transcript or the prompt)', async ($, on) => {
@@ -195,11 +195,11 @@ test('the settings popover closes when the keyboard leaves the pane (a click in 
 
   await ui.redraw(focused(true))
   await ui.press({ key: 'settings-toggle' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeDefined()
 
   await ui.redraw(focused(false))
   await clock.advance(0)
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 })
 
 test('a click on a blank cell of the pane (a gap between prompts) closes the settings popover', async ($, on) => {
@@ -212,7 +212,7 @@ test('a click on a blank cell of the pane (a gap between prompts) closes the set
   const ui = await mountPane($)
 
   await ui.press({ key: 'settings-toggle' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeDefined()
 
   // it spans the whole body: every drawn row (toolbar, the prompt, the footer and its gap), or a docked body's full height
   expect((await ui.find({ key: 'settings-backdrop' }))?.props).toMatchObject({ width: 80, height: 4 })
@@ -220,5 +220,5 @@ test('a click on a blank cell of the pane (a gap between prompts) closes the set
   expect((await ui.find({ key: 'settings-backdrop' }))?.props).toMatchObject({ height: 30 })
 
   await ui.pointer({ type: 'down', x: 3, y: 2, button: 'left', in: 'settings-backdrop' })
-  expect(await ui.find({ type: 'Button', text: /show time/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 })

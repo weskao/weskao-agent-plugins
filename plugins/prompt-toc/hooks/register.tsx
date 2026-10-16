@@ -3,7 +3,7 @@ import type { Register } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 import type { TocEntry } from '../types'
 import { fmt } from './shared/fmt'
-import { DEFAULTS, KEYS, loadSettings, toggleSetting } from './settings'
+import { DEFAULTS, KEYS, LABELS, loadSettings, toggleSetting } from './settings'
 import type { Settings } from './settings'
 import { view } from './filter'
 import { toMarkdown } from './export'
@@ -68,13 +68,8 @@ const resetWindow = ($: EngineInterface) => update($, winTop, () => 0)
 // $.state), read by the ui.scroll hook, whose event carries no width to measure wrapped labels by; lost on a reload,
 // refilled by the next drawing
 let layout: { heights: number[]; budget: number } | undefined
-// the toggles drawn in the settings section, top to bottom
-const TOGGLES: { key: keyof Settings; label: string }[] = [
-  { key: 'openByDefault', label: 'open pane on start' },
-  { key: 'showTime', label: 'show time' },
-]
-// the popover's items are padded to one width, so each item's whole row (not just its text) hovers and presses
-const labelWidth = Math.max(...TOGGLES.map(t => t.label.length))
+// the popover's items (settings.ts LABELS) are padded to one width, so each item's whole row (not just its text) hovers and presses
+const labelWidth = Math.max(...KEYS.map(k => LABELS[k].length))
 // both view buttons are padded to the longer label, so each one's press range is the same width
 const VIEW_WIDTH = 'Prompts'.length
 // set once the default-open ran: a reload re-fires session.start, which must not reopen a pane the person has since closed
@@ -321,7 +316,7 @@ export const register: Register = (on, options) => {
     } catch {}
     // the settings live in the plugin's userConfig (the /config rows); a change made there reloads this module with new options
     try {
-      await update($, settings, () => loadSettings(k => options[KEYS[k]]))
+      await update($, settings, () => loadSettings(k => options[k]))
     } catch {}
     const started = await next(e)
     // open by default: once per process (a refused open is not retried), never when off, never with focus. This open is unasked, so the host places
@@ -547,7 +542,7 @@ export const register: Register = (on, options) => {
       try {
         const next = toggleSetting(await read($, settings), key)
         await update($, settings, () => next)
-        const { deny } = await $.config.set({ key: `prompt-toc.${KEYS[key]}`, value: next[key] })
+        const { deny } = await $.config.set({ key: `prompt-toc.${key}`, value: next[key] })
         if (deny) $.ui.toast(`prompt-toc: ${deny}`)
       } catch (err) {
         $.ui.toast(`prompt-toc: ${String(err)}`)
@@ -684,9 +679,9 @@ export const register: Register = (on, options) => {
         {isSettingsOpen && (
           // a popover under the gear: absolute at the toolbar's row below, so unfolding it never reflows the list
           <Box position="absolute" top={1} right={0} flexDirection="column" backgroundColor="userMessageBackground">
-            {TOGGLES.map(({ key, label }) => (
+            {KEYS.map(key => (
               <Button key={`setting-${key}`} plain onPress={() => void flip(key)}>
-                {' '}{prefs[key] ? <Text color="claude">[x]</Text> : '[ ]'}{` ${label.padEnd(labelWidth)} `}
+                {' '}{prefs[key] ? <Text color="claude">[x]</Text> : '[ ]'}{` ${LABELS[key].padEnd(labelWidth)} `}
               </Button>
             ))}
           </Box>
