@@ -22,7 +22,7 @@ Day-to-day testing never needs this repo: the source in `~/.claude/mods/<name>` 
 copy on this machine, so edit it and run `/reload-plugins`.
 
 `make status` shows each plugin as `released` or `changed` since its last stage. In Claude Code,
-the `plugin-release` skill asks whether (and how) to release after a change.
+the `marketplace-publish` skill asks whether (and how) to release after a change.
 
 `make` alone lists every target (`validate`, `status`, `readme`, `check`, `stage`, `form`, `commit`,
 `push`, `ship`). The
