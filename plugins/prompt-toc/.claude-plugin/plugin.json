@@ -1,0 +1,23 @@
+{
+  "name": "prompt-toc",
+  "version": "0.1.0",
+  "description": "Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (open on start, show time), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export",
+  "author": { "name": "weskao", "url": "https://github.com/weskao" },
+  "license": "MIT",
+  "keywords": ["mod", "pane", "navigation", "toc"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "openByDefault": {
+      "type": "boolean",
+      "title": "Open pane on start",
+      "description": "Open the Prompt TOC pane at session start (wide terminals only)",
+      "default": false
+    },
+    "showTime": {
+      "type": "boolean",
+      "title": "Show time",
+      "description": "Draw the time of each prompt in the Prompt TOC pane",
+      "default": true
+    }
+  }
+}

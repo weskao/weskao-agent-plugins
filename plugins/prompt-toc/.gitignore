@@ -1,0 +1,5 @@
+# Claude Code writes the mod's TypeScript types here each time it loads the mod.
+.claude-plugin/types/
+# tsc output: a bare `tsc -p .` run before the types are laid emits a .js beside each .ts/.tsx;
+# the mod loads hooks/register.tsx, so these are never sources
+hooks/**/*.js
