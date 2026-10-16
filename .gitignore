@@ -1,4 +1,21 @@
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
 __pycache__/
 node_modules/
 .claude-plugin/types/
+# Claude Code per-machine state; .claude/settings.json (the README hook) stays tracked
+.claude/settings.local.json
+.claude/worktrees/
