@@ -1,4 +1,4 @@
-# weskao-plugins
+# weskao-agent-plugins
 
 Monorepo Claude Code marketplace: one `.claude-plugin/marketplace.json`, one folder per plugin
 under `plugins/<name>/`.
@@ -31,7 +31,7 @@ Makefile wraps `~/.claude/skills/marketplace-publish/scripts/publish.py`; `NAME`
 
 - Each plugin has its own version (its `plugin.json` and its `marketplace.json` entry), and
   `make stage` takes one `NAME`, so each plugin gets its own bump level.
-- Users install plugins one at a time (`claude plugin install <name>@weskao-plugins`), so
+- Users install plugins one at a time (`claude plugin install <name>@weskao-agent-plugins`), so
   every plugin folder keeps its own `README.md`.
 
 ## Keeping `README.md` in sync
