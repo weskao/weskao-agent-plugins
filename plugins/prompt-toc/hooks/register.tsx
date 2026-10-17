@@ -594,8 +594,11 @@ export const register: Register = (on, options) => {
     // a jump shows while its end of the list is out of the window
     const toTop = first > 0
     const toEnd = end < heights.length
+    // while the rows overflow, the tree spans the whole body: an inline pane's frame fits its tree, so a shorter one cut
+    // off the chip band's row (absolute at bodyRows - 1) and resized the frame on every scroll
+    const isPaged = scroll !== undefined && (toTop || toEnd)
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" minHeight={isPaged ? scroll.bodyRows : undefined}>
         {/* the toolbar is the first row, in flow, above the pane's own window of rows: it never scrolls */}
         <Box flexDirection="row" backgroundColor="claude">
           {/* the segmented control shows the CURRENT view, not the action; each side sets it explicitly. Always drawn, so the header never changes shape */}
@@ -686,10 +689,17 @@ export const register: Register = (on, options) => {
             ))}
           </Box>
         )}
-        {scroll && (toTop || toEnd) && (
+        {isPaged && (
           // a dim chip on a subtle band at the window's bottom right: it covers only its own cells, brightens on hover;
           // the padding sits inside each label so the whole band, not just the glyphs, presses and lights
+          // ▲ / ▼ page the window as the wheel does: a touch terminal (an iPhone SSH app under tmux) delivers taps but no
+          // wheel ticks, and the engine's arrow keys never scroll a tree that fits its window, as this pane's always does
           <Box position="absolute" top={scroll.bodyRows - 1} right={0} flexDirection="row" backgroundColor="userMessageBackground">
+            {toTop && (
+              <Button key="page-up" plain dimColor onPress={() => void update($, winTop, cur => step(heights, cur, -budget, budget))}>
+                {' ▲ up '}
+              </Button>
+            )}
             {toTop && (
               <Button key="jump-top" plain dimColor onPress={() => void update($, winTop, () => 0)}>
                 {' ↑ top '}
@@ -699,6 +709,11 @@ export const register: Register = (on, options) => {
             {toEnd && (
               <Button key="jump-end" plain dimColor onPress={() => void update($, winTop, () => lastFirst(heights, budget))}>
                 {' ↓ end '}
+              </Button>
+            )}
+            {toEnd && (
+              <Button key="page-down" plain dimColor onPress={() => void update($, winTop, cur => step(heights, cur, budget, budget))}>
+                {' down ▼ '}
               </Button>
             )}
           </Box>

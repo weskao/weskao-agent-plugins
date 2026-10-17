@@ -33,7 +33,7 @@ The chips at the top of the pane switch between two views of the same session.
 
 ![The Prompts view: one numbered, timed row per prompt](https://raw.githubusercontent.com/weskao/weskao-plugins/main/assets/prompt-toc/pane-prompts.png)
 
-In both views, rows above a `/compact` are dimmed under a `── compacted ──` divider; press *▴ hide earlier* to fold them away. The `↑ top · ↓ end` buttons jump to either end of the list.
+In both views, rows above a `/compact` are dimmed under a `── compacted ──` divider; press *▴ hide earlier* to fold them away. The `↑ top · ↓ end` buttons jump to either end of the list, and `▲ up` / `down ▼` beside them move it a page at a time (for touch terminals that tap but send no wheel, such as an iPhone SSH app). They show in the docked and the inline pane alike.
 
 Also in the pane:
 
