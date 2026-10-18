@@ -79,6 +79,9 @@ let layout: { heights: number[]; budget: number } | undefined
 const labelWidth = Math.max(...KEYS.map(k => LABELS[k].length))
 // both view buttons are padded to the longer label, so each one's press range is the same width
 const VIEW_WIDTH = 'Prompts'.length
+// the filter's ✕ chip lights as a pill on hover, in a colour of its own (not the toolbar's accent): the pointer's own
+// inversion of a dim plain Button barely shows. A scope, as the chip sits in no keyed Box
+const CLEAR_HOVER = { scope: 'filter-clear', color: 'inverseText', backgroundColor: 'suggestion', dimColor: false } as const
 // set once the default-open ran: a reload re-fires session.start, which must not reopen a pane the person has since closed
 const autoOpened = atom({ plugin: 'prompt-toc', key: 'autoOpened' } as const, false)
 // a prompt's time is drawn after its label as a space and HH:MM:SS
@@ -706,16 +709,20 @@ export const register: Register = (on, options) => {
               <Input key="search" placeholder="filter rows" value={kw} submitLabel="done" onInput={filterBy} onSubmit={() => void update($, searchOpen, () => false)} />
             </Box>
             {kw && (
-              <Button key="filter-clear" plain dimColor onPress={() => filterBy('')}>
-                {' ✕    '}
+              <Button key="filter-clear" plain dimColor hover={CLEAR_HOVER} onPress={() => filterBy('')}>
+                {' ✕ '}
               </Button>
             )}
           </Box>
         ) : (
+          // only the ✕ presses and lights: the keyword beside it is a plain label
           kw && (
-            <Button key="filter-clear" plain dimColor onPress={() => filterBy('')}>
-              {`filter: ${kw}  ✕    `}
-            </Button>
+            <Box flexDirection="row">
+              <Text dimColor>{` filter: ${kw} `}</Text>
+              <Button key="filter-clear" plain dimColor hover={CLEAR_HOVER} onPress={() => filterBy('')}>
+                {' ✕ '}
+              </Button>
+            </Box>
           )
         )}
         {list.length === 0 && <Text dimColor>No prompts yet. Send one and it appears here.</Text>}

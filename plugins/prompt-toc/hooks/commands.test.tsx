@@ -83,7 +83,7 @@ test('/prompt-toc <keyword> filters the pane to the matches plus their prompts, 
   await seed($)
   expect(await run($, 'prompt-toc', 'beta')).toContain('filtered by "beta"')
   const ui = await mountPane($)
-  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' filter: beta ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^Beta notes$/ })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^third ask$/ })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^Alpha notes$|^first ask$|^second ask$/ })).toBeUndefined()
@@ -130,7 +130,7 @@ test('the 🔍 button unfolds a search field that filters as you type, and Enter
 
   await ui.input({ key: 'search', text: 'beta' })
   expect(await ui.find({ type: 'Input', key: 'search' })).toBeUndefined()
-  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' filter: beta ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeUndefined()
 })
 
@@ -157,7 +157,7 @@ test('a keyword that matches nothing shows a dim no matches line', async ($, on)
   await run($, 'prompt-toc', 'zzz-none')
   const ui = await mountPane($)
   expect(await ui.find({ type: 'Text', text: 'no matches' })).toBeDefined()
-  expect(await ui.find({ type: 'Button', text: 'filter: zzz-none  ✕    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' filter: zzz-none ' })).toBeDefined()
 })
 
 test('/prompt-toc-export writes the outline as Markdown into a new file and answers the path', async ($, on) => {

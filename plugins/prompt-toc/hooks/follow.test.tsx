@@ -231,7 +231,7 @@ test('/clear resets the keyword filter', async ($, on) => {
   await prompt($, 'k2', 'beta ask')
   await $.command.run({ command: 'prompt-toc', args: 'beta' } as never)
   const ui = await pane($)
-  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' filter: beta ' })).toBeDefined()
   await $.session.end({ reason: 'clear', sessionId: 's' } as never)
   await prompt($, 'k3', 'new ask')
   expect(await ui.find({ type: 'Button', text: /^filter:/ })).toBeUndefined()
