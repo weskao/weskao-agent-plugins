@@ -4,7 +4,7 @@ P := $(HOME)/.claude/skills/marketplace-publish/scripts/publish.py
 # a plugin's source: a mod in ~/.claude/mods, else a skill in ~/.claude/skills
 SRC = $(firstword $(wildcard $(HOME)/.claude/mods/$(NAME) $(HOME)/.claude/skills/$(NAME)))
 
-.PHONY: help validate status readme check stage form commit push ship _src
+.PHONY: help validate status readme check stage form commit push ship release _src
 
 help: ## list the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -31,8 +31,12 @@ commit: ## commit locally, no push: make commit M="fix(prompt-toc): ..."
 	@test -n "$(M)" || { echo 'usage: make commit M="<commit message>"'; exit 1; }
 	git add -A && git commit -m "$(M)"
 
-push: ## push local commits (safe-push: fetch first, never force)
+push: ## push local commits (safe-push: fetch first, never force), then release
 	python3 "$(HOME)/.claude/skills/safe-git-push/scripts/safe_push.py"
+	python3 "$(P)" release --repo .
+
+release: ## GitHub release <name>-v<version> for each pushed version without one
+	python3 "$(P)" release --repo .
 
 ship: ## commit and push (public repo): make ship M="fix(prompt-toc): ..."
 	@test -n "$(M)" || { echo 'usage: make ship M="<commit message>"'; exit 1; }

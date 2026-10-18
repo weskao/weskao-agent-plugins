@@ -13,8 +13,13 @@ in `~/.claude/skills/<name>`.
 
 ```bash
 make stage NAME=<name> BUMP=patch     # check, copy here, update marketplace.json + README
-make ship M="fix(<name>): ..."        # commit + push (public repo: ask the user first)
+make ship M="fix(<name>): ..."        # commit + push + GitHub release (public repo: ask the user first)
 ```
+
+Before `stage`, write the release notes under `## Unreleased` in the source's `CHANGELOG.md`;
+`stage` dates the heading (`## <version> — <date>`) and refuses a release without one. After a
+push, `make ship` / `make push` create the GitHub release `<name>-v<version>` from that section
+(`make release` retries; it skips versions already tagged).
 
 To keep a release local for now: `make commit M="..."` (no push), then `make push` when ready.
 
@@ -25,7 +30,7 @@ copy on this machine, so edit it and run `/reload-plugins`.
 the `marketplace-publish` skill asks whether (and how) to release after a change.
 
 `make` alone lists every target (`validate`, `status`, `readme`, `check`, `stage`, `form`, `commit`,
-`push`, `ship`). The
+`push`, `ship`, `release`). The
 Makefile wraps `~/.claude/skills/marketplace-publish/scripts/publish.py`; `NAME` is looked up in
 `~/.claude/mods/` then `~/.claude/skills/`.
 
