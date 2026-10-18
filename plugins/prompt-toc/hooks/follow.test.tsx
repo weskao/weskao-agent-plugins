@@ -73,8 +73,9 @@ test('the topmost on-screen entry is written once, after one coalesced timer', a
   await prompt($, 'u2', 'second')
   const ui = await pane($)
 
-  // three rows reported in one frame: no write during render, one after the timer
-  const u2 = await row($, 'UserMessage', 'u2', 'second', { first: 0, last: 2, of: 3 })
+  // three rows reported in one frame: no write during render, one after the timer. u2's last row is below the
+  // screen: not scrolled to the end, so the topmost row is the position
+  const u2 = await row($, 'UserMessage', 'u2', 'second', { first: 0, last: 1, of: 3 })
   const a1 = await row($, 'AssistantMessage', 'a1', '## Plan\nx', { first: 3, last: 6, of: 7 })
   await row($, 'UserMessage', 'u1', 'first', null)
   expect(writes).toHaveLength(0)
@@ -95,9 +96,9 @@ test('the topmost on-screen entry is written once, after one coalesced timer', a
   expect(writes).toEqual(['a1|2|Plan', 'u2|0|second'])
   expect(await underlined(ui)).toEqual(['second'])
 
-  // a row entering below the top changes nothing on top: the timer runs, the atom is not re-written
+  // a row entering below the top, its end still off screen, changes nothing on top: the timer runs, no re-write
   await reply($, 'a2', '## Done\ny')
-  const a2 = await row($, 'AssistantMessage', 'a2', '## Done\ny', { first: 0, last: 3, of: 4 })
+  const a2 = await row($, 'AssistantMessage', 'a2', '## Done\ny', { first: 0, last: 2, of: 4 })
   await clock.advance(100)
   expect(writes).toHaveLength(2)
 
@@ -106,6 +107,46 @@ test('the topmost on-screen entry is written once, after one coalesced timer', a
   await a2.redraw({ text: '## Done\ny', isFirstOfReply: true, onScreen: null } as never)
   await clock.advance(100)
   expect(writes).toHaveLength(2)
+  expect(await underlined(ui)).toEqual(['second'])
+})
+
+// the transcript scrolled to its end with a short last exchange: an earlier row is still at the top, yet the mark goes
+// to the bottom-most entry, the one the person is reading
+test('at the end of the transcript the last entry is marked, not the topmost row', async ($, on) => {
+  mock.session(on)
+  engine(on)
+  const clock = mock.clock(on)
+  await prompt($, 'e1', 'first')
+  await reply($, 'r1', '## Plan\nx')
+  await prompt($, 'e2', 'second')
+  await reply($, 'r2', '## Steps\na\n## Result\nb')
+  const ui = await pane($)
+
+  // r1's tail at the top, e2 and the whole of r2 below it: r2's last row is on screen
+  await row($, 'AssistantMessage', 'r1', '## Plan\nx', { first: 4, last: 6, of: 7 })
+  await row($, 'UserMessage', 'e2', 'second', { first: 0, last: 2, of: 3 })
+  const r2 = await row($, 'AssistantMessage', 'r2', '## Steps\na\n## Result\nb', { first: 0, last: 8, of: 9 })
+  await clock.advance(100)
+  // the reply's last heading: the bottom-most entry
+  expect(await underlined(ui)).toEqual(['Result'])
+
+  // scrolled up past r2's end: back to the topmost row
+  await r2.redraw({ text: '## Steps\na\n## Result\nb', isFirstOfReply: true, onScreen: { first: 0, last: 5, of: 9 } } as never)
+  await clock.advance(100)
+  expect(await underlined(ui)).toEqual(['Plan'])
+})
+
+// the same for prompts alone: a one-row tail of the previous prompt at the top, the last prompt whole below it
+test('at the end of the transcript a short last prompt is marked', async ($, on) => {
+  mock.session(on)
+  engine(on)
+  const clock = mock.clock(on)
+  await prompt($, 'g1', 'first')
+  await prompt($, 'g2', 'second')
+  const ui = await pane($)
+  await row($, 'UserMessage', 'g1', 'first', { first: 2, last: 2, of: 3 })
+  await row($, 'UserMessage', 'g2', 'second', { first: 0, last: 2, of: 3 })
+  await clock.advance(100)
   expect(await underlined(ui)).toEqual(['second'])
 })
 
@@ -190,7 +231,7 @@ test('/clear resets the keyword filter', async ($, on) => {
   await prompt($, 'k2', 'beta ask')
   await $.command.run({ command: 'prompt-toc', args: 'beta' } as never)
   const ui = await pane($)
-  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
   await $.session.end({ reason: 'clear', sessionId: 's' } as never)
   await prompt($, 'k3', 'new ask')
   expect(await ui.find({ type: 'Button', text: /^filter:/ })).toBeUndefined()

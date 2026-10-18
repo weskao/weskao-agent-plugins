@@ -83,7 +83,7 @@ test('/prompt-toc <keyword> filters the pane to the matches plus their prompts, 
   await seed($)
   expect(await run($, 'prompt-toc', 'beta')).toContain('filtered by "beta"')
   const ui = await mountPane($)
-  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^Beta notes$/ })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^third ask$/ })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^Alpha notes$|^first ask$|^second ask$/ })).toBeUndefined()
@@ -115,6 +115,41 @@ test('the clear button removes the filter', async ($, on) => {
   expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeDefined()
 })
 
+test('the 🔍 button unfolds a search field that filters as you type, and Enter folds it back into the chip', async ($, on) => {
+  mock.session(on)
+  openOk(on)
+  await seed($)
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Input', key: 'search' })).toBeUndefined()
+  await ui.press({ key: 'search-toggle' })
+  expect(await ui.find({ type: 'Input', key: 'search' })).toBeDefined()
+
+  await ui.input({ key: 'search', text: 'beta', kind: 'change' })
+  expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /^third ask$/ })).toBeDefined()
+
+  await ui.input({ key: 'search', text: 'beta' })
+  expect(await ui.find({ type: 'Input', key: 'search' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: 'filter: beta  ✕    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeUndefined()
+})
+
+test('the open search field holds the /prompt-toc keyword, and its ✕ clears it', async ($, on) => {
+  mock.session(on)
+  openOk(on)
+  await seed($)
+  await run($, 'prompt-toc', 'alpha')
+  const ui = await mountPane($)
+  await ui.press({ key: 'search-toggle' })
+  expect((await ui.find({ type: 'Input', key: 'search' }))?.props.value).toBe('alpha')
+  await ui.press({ key: 'filter-clear' })
+  expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeDefined()
+  // folding with no keyword leaves no chip
+  await ui.press({ key: 'search-toggle' })
+  expect(await ui.find({ type: 'Input', key: 'search' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /^filter:/ })).toBeUndefined()
+})
+
 test('a keyword that matches nothing shows a dim no matches line', async ($, on) => {
   mock.session(on)
   openOk(on)
@@ -122,7 +157,7 @@ test('a keyword that matches nothing shows a dim no matches line', async ($, on)
   await run($, 'prompt-toc', 'zzz-none')
   const ui = await mountPane($)
   expect(await ui.find({ type: 'Text', text: 'no matches' })).toBeDefined()
-  expect(await ui.find({ type: 'Button', text: 'filter: zzz-none  ✕' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: 'filter: zzz-none  ✕    ' })).toBeDefined()
 })
 
 test('/prompt-toc-export writes the outline as Markdown into a new file and answers the path', async ($, on) => {

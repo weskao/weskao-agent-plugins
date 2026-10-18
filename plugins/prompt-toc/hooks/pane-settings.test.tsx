@@ -222,3 +222,15 @@ test('a click on a blank cell of the pane (a gap between prompts) closes the set
   await ui.pointer({ type: 'down', x: 3, y: 2, button: 'left', in: 'settings-backdrop' })
   expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeUndefined()
 })
+
+// 🔍 is a color emoji: tofu on Windows conhost and on Linux without an emoji font, so only macOS draws it
+for (const [os, isMac, label] of [['macOS', true, ' 🔍 '], ['Windows / Linux', false, ' Search ']] as const) {
+  test(`the search button reads ${JSON.stringify(label)} on ${os}`, async ($, on) => {
+    mock.session(on)
+    store(on)
+    on('fs.exists', (_$, e) => ({ value: isMac && (e as { path: string }).path === '/System/Library/CoreServices/SystemVersion.plist' }) as never)
+    await start($, on)
+    const ui = await mountPane($)
+    expect(await ui.find({ type: 'Button', key: 'search-toggle', text: label })).toBeDefined()
+  })
+}

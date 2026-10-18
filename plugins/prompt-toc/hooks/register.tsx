@@ -46,6 +46,8 @@ const following = atom({ plugin: 'prompt-toc', key: 'following' } as const, '')
 // the prompt/reply rows the terminal reports on screen, by requestId: module memory, since a render hook may not write
 // $.state (drawing is pure); lost on a reload, refilled by the next report
 const shown = new Set<string>()
+// those of them whose last row is on screen too: the last entry's in it means the transcript is scrolled to its end
+const ended = new Set<string>()
 let flush: { cancel(): void } | undefined
 // the session id the index was last rebuilt from (module memory); undefined after a session end, so the next follow tick rebuilds
 let indexedFor: string | undefined
@@ -60,6 +62,11 @@ const promptsOnly = atom({ plugin: 'prompt-toc', key: 'promptsOnly' } as const, 
 const foldOld = atom({ plugin: 'prompt-toc', key: 'foldOld' } as const, false)
 // /prompt-toc <keyword>: the pane lists only matching rows (plus their prompts); '' = no filter
 const keyword = atom({ plugin: 'prompt-toc', key: 'keyword' } as const, '')
+// the 🔍 toolbar button unfolds a search field under the toolbar that edits the same keyword; folded, the filter stays
+const searchOpen = atom({ plugin: 'prompt-toc', key: 'searchOpen' } as const, false)
+// 🔍 is a color emoji: tofu on Windows conhost and on Linux without an emoji font, so it is drawn on macOS only
+// (the mod API names no OS; this file exists only there). Set in session.start, before the default open draws the pane
+let searchLabel = ' Search '
 // the pane's own window over its rows (window.ts): the index of the topmost item shown under the fixed toolbar
 const winTop = atom({ plugin: 'prompt-toc', key: 'winTop' } as const, 0)
 // a new view (prompts-only, a keyword, a cleared index) starts its window at the top
@@ -85,15 +92,19 @@ const MAX_REPLY_CELLS = 60
 const DIVIDER_LEVEL = -1
 const isPromptEntry = (x: TocEntry) => !x.divider && x.level === 0
 
-// a prompt row → one level-0 entry; a reply row → its headings, or one preview line where it has none;
-// a compact row → one divider (rescan rows arrive as stored, hence the same commandEcho / isEngineText the live
-// classifier applies)
-const toEntries = (id: string, kind: 'prompt' | 'reply' | 'compact', text: string, ts?: number): TocEntry[] => {
+// a prompt row → one level-0 entry; a reply row → its headings, or one preview line where it has none (an answer row,
+// the reply that ended its turn, the same marked final); a compact row → one divider (rescan rows arrive as stored,
+// hence the same commandEcho / isEngineText the live classifier applies)
+const toEntries = (id: string, kind: 'prompt' | 'reply' | 'answer' | 'compact', text: string, ts?: number, agent?: string): TocEntry[] =>
+  toRows(id, kind, text, ts).map(x => (agent ? { ...x, agent } : x))
+
+const toRows = (id: string, kind: 'prompt' | 'reply' | 'answer' | 'compact', text: string, ts?: number): TocEntry[] => {
   if (kind === 'compact') return [{ id, level: DIVIDER_LEVEL, text: 'compacted', divider: true }]
-  if (kind === 'reply') {
-    const found = headings(text, Infinity).map((h, at) => ({ id, level: h.level, text: clip(h.text, MAX_REPLY_CELLS), at }))
+  if (kind === 'reply' || kind === 'answer') {
+    const found: TocEntry[] = headings(text, Infinity).map((h, at) => ({ id, level: h.level, text: clip(h.text, MAX_REPLY_CELLS), at }))
     const first = found.length ? '' : lead(text)
-    return first ? [{ id, level: 1, text: clip(first, MAX_REPLY_CELLS), preview: true as const }] : found
+    const out: TocEntry[] = first ? [{ id, level: 1, text: clip(first, MAX_REPLY_CELLS), preview: true }] : found
+    return kind === 'answer' ? out.map(x => ({ ...x, final: true })) : out
   }
   return text.trim() && !text.startsWith('[Request interrupted') && !isEngineText(text) ? [{ id, level: 0, text: oneLine(commandEcho(text) ?? text, MAX_LABEL), ...(ts !== undefined && { ts }) }] : []
 }
@@ -138,8 +149,9 @@ const lead = (text: string) => {
   return ''
 }
 
-// under each prompt: its replies' headings, or else only the last reply's preview (the turn's final answer,
-// not the narration between tool calls)
+// under each prompt, per turn: its replies' headings, or else only the last reply's preview (the turn's final answer,
+// not the narration between tool calls). Turns a background agent's hand-back starts add no prompt row, so a final
+// entry closes its turn as a prompt would: each turn's answer stays
 const tidy = (list: TocEntry[]) => {
   const out: TocEntry[] = []
   let start = 0
@@ -148,6 +160,7 @@ const tidy = (list: TocEntry[]) => {
       // a divider closes the replies above it: later replies never merge into them
       out.push(x)
       start = out.length
+      continue
     } else if (x.preview) {
       if (out.slice(start).some(y => !y.preview)) continue
       out.splice(start)
@@ -155,8 +168,17 @@ const tidy = (list: TocEntry[]) => {
     } else {
       out.splice(start, out.length - start, ...out.slice(start).filter(y => !y.preview), x)
     }
+    if (x.final) start = out.length
   }
   return out
+}
+
+// each loop's entries settle on their own (its prompts, turns and cap), the main conversation's first: the pane draws one
+// loop at a time, so a subagent's rows never close or replace the main conversation's replies
+const settle = (list: TocEntry[]) => {
+  const byAgent = new Map<string, TocEntry[]>()
+  for (const x of list) byAgent.set(x.agent ?? '', [...(byAgent.get(x.agent ?? '') ?? []), x])
+  return [...byAgent.values()].flatMap(rows => cap(tidy(rows)))
 }
 
 const promptMark = (n: number) => `❯ ${n}  `
@@ -198,21 +220,30 @@ async function rescan($: EngineInterface, transcript?: string) {
     const argv = ['python3', `${$.plugin.root}/scripts/scan.py`, sid, ...(transcript ? [transcript] : [])]
     const ran = await $.process.run(argv, { timeoutMs: 20000 })
     if (ran.exitCode !== 0) return
-    const rows = JSON.parse(ran.stdout) as [string, 'prompt' | 'reply' | 'compact', string, string?][]
+    const rows = JSON.parse(ran.stdout) as [string, 'prompt' | 'reply' | 'answer' | 'compact', string, string?, string?][]
     // the transcript's iso time as epoch ms, the unit $.clock.now() gives live rows; '' / unparsable = no time
     // a kind this mod does not know is skipped, and so is a non-string text: one bad row must not throw away the whole rebuild
-    const scanned = rows.flatMap(([id, kind, text, iso]) => {
+    const scanned = rows.flatMap(([id, kind, text, iso, agent]) => {
       const at = Date.parse(iso ?? '')
-      return typeof text === 'string' && (kind === 'prompt' || kind === 'reply' || kind === 'compact') ? toEntries(id, kind, text, Number.isNaN(at) ? undefined : at) : []
+      return typeof text === 'string' && (kind === 'prompt' || kind === 'reply' || kind === 'answer' || kind === 'compact') ? toEntries(id, kind, text, Number.isNaN(at) ? undefined : at, agent) : []
     })
     const seen = new Set(scanned.map(keyOf))
     await update($, entries, list => {
       // a prompt stamped live keeps that time, as message-clock keeps its own: one time per row in both mods
       const live = new Map(list.flatMap(x => (x.ts === undefined ? [] : [[keyOf(x), x.ts] as const])))
       const timed = scanned.map(x => (live.has(keyOf(x)) ? { ...x, ts: live.get(keyOf(x)) } : x))
-      return cap(tidy([...timed, ...list.filter(x => !seen.has(keyOf(x)) && !before.has(keyOf(x)))]))
+      return settle([...timed, ...list.filter(x => !seen.has(keyOf(x)) && !before.has(keyOf(x)))])
     })
   } catch {}
+}
+
+// a subagent's label in its own list: the Agent call's description, else its id
+async function describe($: EngineInterface, agentId: string) {
+  try {
+    return (await $.agent.list()).find(a => a.id === agentId)?.description || `agent ${agentId.slice(0, 7)}`
+  } catch {
+    return `agent ${agentId.slice(0, 7)}`
+  }
 }
 
 // the one open path: /prompt-toc, /prompt-toc-open, the pane tool and open-on-start (which never takes focus)
@@ -230,9 +261,15 @@ async function follow($: EngineInterface) {
     // rows of another session on screen (a /resume, a fork, a /clear whose SessionStart never reached this mod):
     // rebuild from the session now running, so the open pane needs no close and reopen
     if ((await $.session.id().catch(() => indexedFor)) !== indexedFor) await rescan($)
-    const top = (await read($, entries)).find(x => !x.divider && shown.has(x.id))
+    const list = (await read($, entries)).filter(x => !x.divider)
+    const top = list.find(x => shown.has(x.id))
+    // scrolled to the end, a short last exchange leaves an earlier row at the top: mark the bottom-most entry instead,
+    // the last of its loop's list (a reply with headings: its last heading)
+    const bottom = list.findLast(x => shown.has(x.id))
+    const isEnd = bottom !== undefined && ended.has(bottom.id) && list.findLast(x => x.agent === bottom.agent) === bottom
+    const at = isEnd ? bottom : top
     // nothing indexed on screen (narration between tool calls): keep the last position
-    if (top && keyOf(top) !== (await read($, following))) await update($, following, () => keyOf(top))
+    if (at && keyOf(at) !== (await read($, following))) await update($, following, () => keyOf(at))
   } catch {}
 }
 
@@ -248,7 +285,7 @@ const exportPath = (arg: string) => {
 // shortcut: check-then-write races with another writer, and a folder not there yet is refused (stat needs it); upgrade if asked
 async function exportToc($: EngineInterface, arg: string) {
   if (await isOff($)) return OFF_NOTE
-  const list = await read($, entries)
+  const list = (await read($, entries)).filter(x => !x.agent)
   if (!list.length) return 'prompt-toc: nothing indexed yet, nothing to export.'
   const id = (await $.session.id().catch(() => '')).replace(/[^\w-]/g, '').slice(0, 8)
   const path = exportPath(arg || `prompt-toc-${id || 'export'}.md`)
@@ -314,6 +351,9 @@ export const register: Register = (on, options) => {
         isDeferred: false,
       })
     } catch {}
+    try {
+      if (await $.fs.exists('/System/Library/CoreServices/SystemVersion.plist')) searchLabel = ' 🔍 '
+    } catch {}
     // the settings live in the plugin's userConfig (the /config rows); a change made there reloads this module with new options
     try {
       await update($, settings, () => loadSettings(k => options[k]))
@@ -358,6 +398,7 @@ export const register: Register = (on, options) => {
     flush?.cancel()
     flush = undefined
     shown.clear()
+    ended.clear()
     indexedFor = undefined
     // the pane stays open across session ends: /clear starts the index empty, /resume refills it (classic.SessionStart below)
     if (e.reason === 'clear' || e.reason === 'resume') {
@@ -379,7 +420,10 @@ export const register: Register = (on, options) => {
   // shortcut: two signals can fire for one compact and rescan twice (replaces the index, harmless); coalesce if that costs
   on('classic.SessionStart', async ($, e, next) => {
     const result = await next(e)
-    if (e.source === 'compact') shown.clear()
+    if (e.source === 'compact') {
+      shown.clear()
+      ended.clear()
+    }
     if (e.source === 'resume' || e.source === 'fork' || e.source === 'compact') void rescan($, e.transcript_path)
     return result
   })
@@ -388,6 +432,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     // the rows before the compact left without an onScreen null: they must not pin the follow mark
     shown.clear()
+    ended.clear()
     void rescan($, e.transcript_path)
     return result
   })
@@ -395,7 +440,6 @@ export const register: Register = (on, options) => {
   // index typed prompts (level 0) and reply headings (level 1-3) or previews, keyed by row uuid = render requestId
   on('session.append', async ($, e, next) => {
     const result = await next(e)
-    if (e.agentId) return result
     try {
       const row = classify(e)
       // a queued prompt is no row of the conversation yet: it is indexed once it is sent
@@ -403,13 +447,31 @@ export const register: Register = (on, options) => {
       // shortcut: the event carries no stored timestamp, so this and message-clock each read the clock after the append
       // (a second or two after the transcript's time); the two reads can straddle a second, share one stamp if that shows
       const ts = row && row.source !== 'queued' && isPrompt ? await $.clock.now().catch(() => undefined) : undefined
-      const found = row && row.source !== 'queued' ? toEntries(e.uuid, isPrompt ? 'prompt' : 'reply', row.text, ts) : []
+      let found = row && row.source !== 'queued' ? toEntries(e.uuid, isPrompt ? 'prompt' : 'reply', row.text, ts, e.agentId) : []
+      // a subagent's first row opens its list: its task brief reads as the agent's description, not the brief's text
+      if (e.agentId && !(await read($, entries)).some(x => x.agent === e.agentId)) {
+        const task: TocEntry = { id: e.uuid, level: 0, text: oneLine(await describe($, e.agentId), MAX_LABEL), agent: e.agentId, ...(ts !== undefined && { ts }) }
+        found = [task, ...found.filter(x => x.level !== 0)]
+      }
       if (found.length) {
         await update($, entries, list => {
           const seen = new Set(list.map(keyOf))
-          return cap(tidy([...list, ...found.filter(x => !seen.has(keyOf(x)))]))
+          return settle([...list, ...found.filter(x => !seen.has(keyOf(x)))])
         })
       }
+    } catch {}
+    return result
+  })
+
+  // a loop's turn ended (main, or a subagent's): its last reply is the turn's answer, marked final so a later turn's replies (one a
+  // background agent's hand-back started, with no prompt row) never replace it; a rescan reads the same from stop_reason
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e)
+    try {
+      await update($, entries, list => {
+        const last = list.findLast(x => x.agent === e.agentId)
+        return last && !last.divider && last.level > 0 && !last.final ? list.map(x => (x.id === last.id ? { ...x, final: true as const } : x)) : list
+      })
     } catch {}
     return result
   })
@@ -425,9 +487,13 @@ export const register: Register = (on, options) => {
   // range if the mark sticks after a pane jump
   on('ui.render', { component: ['UserMessage', 'AssistantMessage'] }, ($, e, next) => {
     const at = e.props.onScreen
-    if (at !== undefined && e.surface === 'terminal' && (at ? !shown.has(e.requestId) : shown.has(e.requestId))) {
+    // its last row in view: `last` is inclusive, `of` the whole extent
+    const isEnded = !!at && at.last >= at.of - 1
+    if (at !== undefined && e.surface === 'terminal' && (!!at !== shown.has(e.requestId) || isEnded !== ended.has(e.requestId))) {
       if (at) shown.add(e.requestId)
       else shown.delete(e.requestId)
+      if (isEnded) ended.add(e.requestId)
+      else ended.delete(e.requestId)
       // a timer refused by the host must never fail the message's drawing
       try {
         flush ??= $.clock.after(50, () => void follow($))
@@ -490,6 +556,8 @@ export const register: Register = (on, options) => {
     const elements = $.ui.resolve(e)
     const { Box, Text, Button } = elements
     const Client = 'Client' in elements ? elements.Client : undefined
+    // mobile has no Input: no search button there, /prompt-toc <keyword> still filters
+    const Input = 'Input' in elements ? elements.Input : undefined
     // the toolbar is a solid accent bar (the colour of a prompt's ❯, set apart from the grey selected-row band) in theme keys,
     // so it follows light and dark: an inactive label is the bar's inverse text, the active one an inverted pill
     const chrome = (active: boolean, text: string) => (
@@ -506,7 +574,8 @@ export const register: Register = (on, options) => {
       </Text>
     )
     if (await isOff($)) return <Text dimColor>prompt-toc is off (/prompt-toc-open).</Text>
-    const list = await read($, entries)
+    // one loop at a time: the agent whose transcript is in view, else the main conversation
+    const list = (await read($, entries)).filter(x => x.agent === e.props.view?.agentId)
     const current = await read($, selected)
     const followed = await read($, following)
     const prefs = await read($, settings)
@@ -518,6 +587,7 @@ export const register: Register = (on, options) => {
     const isSettingsOpen = await read($, settingsOpen)
     const isPromptsOnly = await read($, promptsOnly)
     const kw = await read($, keyword)
+    const isSearchOpen = Input !== undefined && (await read($, searchOpen))
     const isFolded = await read($, foldOld)
     const top = await read($, winTop)
 
@@ -535,6 +605,17 @@ export const register: Register = (on, options) => {
       } catch (err) {
         $.ui.toast(`prompt-toc: ${String(err)}`)
       }
+    }
+
+    // a new keyword starts the window at the top, as /prompt-toc <keyword> does
+    const filterBy = (text: string) => void Promise.all([update($, keyword, () => text), resetWindow($)])
+    // unfolding puts the keys in the field; a deny (the pane not holding the keys) leaves it a click away
+    const toggleSearch = async () => {
+      try {
+        const isOpen = !(await read($, searchOpen))
+        await update($, searchOpen, () => isOpen)
+        if (isOpen) await $.ui.focus({ requestId: PANE, key: 'search' })
+      } catch {}
     }
 
     // flip one setting and mirror it to its /config row (userConfig field), so the menu shows the same value
@@ -586,7 +667,7 @@ export const register: Register = (on, options) => {
     // no-match line), then the items that fit, a row short of the body for the jump chips; the engine's window never
     // moves (ui.scroll above). Inline (no `scroll`) the frame fits the tree: every item
     const scroll = e.props.scroll
-    const fixedRows = 1 + (kw ? 1 : 0) + (list.length === 0 || isNoMatch ? 1 : 0)
+    const fixedRows = 1 + (isSearchOpen || kw ? 1 : 0) + (list.length === 0 || isNoMatch ? 1 : 0)
     const budget = scroll ? scroll.bodyRows - 1 - fixedRows : Infinity
     const first = scroll ? clamp(top, heights, budget) : 0
     const end = scroll ? fit(heights, first, budget) : heights.length
@@ -609,14 +690,33 @@ export const register: Register = (on, options) => {
             {side(isPromptsOnly, ` ${isPromptsOnly ? '◉' : '○'} ${'Prompts'.padEnd(VIEW_WIDTH)} `)}
           </Button>
           <Box flexGrow={1} />
+          {Input && (
+            <Button key="search-toggle" plain onPress={() => void toggleSearch()}>
+              {chrome(isSearchOpen, searchLabel)}
+            </Button>
+          )}
           <Button key="settings-toggle" plain onPress={() => void update($, settingsOpen, open => !open)}>
             {chrome(isSettingsOpen, ' ⚙ Settings ')}
           </Button>
         </Box>
-        {kw && (
-          <Button key="filter-clear" plain dimColor onPress={() => void Promise.all([update($, keyword, () => ''), resetWindow($)])}>
-            {`filter: ${kw}  ✕`}
-          </Button>
+        {isSearchOpen && Input ? (
+          // one row, like the folded chip below: Enter keeps the filter and folds the field back into that chip
+          <Box flexDirection="row">
+            <Box flexGrow={1} flexShrink={1}>
+              <Input key="search" placeholder="filter rows" value={kw} submitLabel="done" onInput={filterBy} onSubmit={() => void update($, searchOpen, () => false)} />
+            </Box>
+            {kw && (
+              <Button key="filter-clear" plain dimColor onPress={() => filterBy('')}>
+                {' ✕    '}
+              </Button>
+            )}
+          </Box>
+        ) : (
+          kw && (
+            <Button key="filter-clear" plain dimColor onPress={() => filterBy('')}>
+              {`filter: ${kw}  ✕    `}
+            </Button>
+          )
         )}
         {list.length === 0 && <Text dimColor>No prompts yet. Send one and it appears here.</Text>}
         {isNoMatch && <Text dimColor>no matches</Text>}

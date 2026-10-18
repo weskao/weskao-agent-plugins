@@ -3,3 +3,5 @@
 # tsc output: a bare `tsc -p .` run before the types are laid emits a .js beside each .ts/.tsx;
 # the mod loads hooks/register.tsx, so these are never sources
 hooks/**/*.js
+# the test runner's Vite cache (node_modules/.vite)
+node_modules/

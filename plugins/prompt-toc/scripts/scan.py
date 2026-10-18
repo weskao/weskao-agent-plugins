@@ -4,6 +4,9 @@
 kind 'prompt': what the person typed (prompt, slash command echo, mid-turn message), raw text.
 kind 'reply': an assistant text row reduced to its heading and fence lines, or its start when it has no heading
 (register.tsx parses them).
+kind 'answer': a reply row that ended its turn (stop_reason end_turn), the same text as 'reply'.
+A subagent's rows follow the main ones with a fifth element, its agent id; its opening prompt reads as its
+description (.meta.json).
 kind 'compact': the /compact boundary marker, text = its trigger ('manual' | 'auto'); the post-compact summary
 user row (isCompactSummary) is skipped.
 iso: the record's transcript timestamp ('' when absent).
@@ -41,18 +44,18 @@ def prompt_of(content) -> str:
     return text
 
 
-def rows(path: str):
+def rows(path: str, side: bool = False):
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
-            # cheap prefilter: most lines are tool calls/results and progress records
-            if '"isSidechain":true' in line or '"tool_result"' in line:
+            # cheap prefilter: most lines are tool calls/results and progress records; a subagent's file is all sidechain
+            if ('"isSidechain":true' in line and not side) or '"tool_result"' in line:
                 continue
             try:
                 r = json.loads(line)
             except ValueError:
                 continue
             kind, uuid = r.get("type"), r.get("uuid")
-            if not uuid or r.get("isSidechain") or r.get("isMeta") or r.get("isCompactSummary"):
+            if not uuid or (r.get("isSidechain") and not side) or r.get("isMeta") or r.get("isCompactSummary"):
                 continue
             ts = r.get("timestamp") or ""
             if kind == "user":
@@ -74,13 +77,36 @@ def rows(path: str):
                 elif r.get("subtype") == "compact_boundary":
                     yield [uuid, "compact", (r.get("compactMetadata") or {}).get("trigger") or "", ts]
             elif kind == "assistant":
-                text = text_of((r.get("message") or {}).get("content"))
+                msg = r.get("message") or {}
+                text = text_of(msg.get("content"))
                 lines = [ln for ln in text.split("\n") if KEEP.match(ln)]
+                reply = "answer" if msg.get("stop_reason") == "end_turn" else "reply"
                 if any(ln.lstrip().startswith("#") for ln in lines):
-                    yield [uuid, "reply", "\n".join(lines), ts]
+                    yield [uuid, reply, "\n".join(lines), ts]
                 elif text.strip():
                     # no headings: its start is enough for the one-line preview register.tsx draws
-                    yield [uuid, "reply", text[:2000], ts]
+                    yield [uuid, reply, text[:2000], ts]
+
+
+# the transcript's subagents' rows, each led by its task: <session>/subagents/agent-<id>.jsonl (+ .meta.json)
+# shortcut: reads every subagent file on each scan; a session with hundreds of agents wants a per-agent request
+def all_rows(path: str):
+    yield from rows(path)
+    folder = os.path.join(path[: -len(".jsonl")], "subagents")
+    for sub in sorted(glob.glob(os.path.join(folder, "agent-*.jsonl"))):
+        agent = os.path.basename(sub)[len("agent-") : -len(".jsonl")]
+        try:
+            with open(sub[: -len(".jsonl")] + ".meta.json", encoding="utf-8") as f:
+                task = (json.load(f).get("description") or "").strip()
+        except (OSError, ValueError):
+            task = ""
+        first = True
+        for row in rows(sub, side=True):
+            # its opening row is the whole task brief: the short description labels it better
+            if first and row[1] == "prompt" and task:
+                row[2] = task
+            first = False
+            yield [*row, agent]
 
 
 def main() -> int:
@@ -91,7 +117,7 @@ def main() -> int:
     if not path or not os.path.isfile(path):
         print("[]")
         return 0
-    json.dump(list(rows(path)), sys.stdout, ensure_ascii=False)
+    json.dump(list(all_rows(path)), sys.stdout, ensure_ascii=False)
     return 0
 
 

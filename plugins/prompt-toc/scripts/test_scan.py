@@ -66,6 +66,33 @@ class ScanTest(unittest.TestCase):
         ])
         self.assertEqual(out, [[f"q{i}", "prompt", want, T] for i, (_, want) in enumerate(self.SHAPES)])
 
+    def test_reply_that_ends_its_turn_is_an_answer(self):
+        out = scan_rows([
+            rec(uuid="a1", type="assistant", message={"stop_reason": "tool_use", "content": [{"type": "text", "text": "Checking."}]}),
+            rec(uuid="a2", type="assistant", message={"stop_reason": "end_turn", "content": [{"type": "text", "text": "Done."}]}),
+        ])
+        self.assertEqual(out, [["a1", "reply", "Checking.", T], ["a2", "answer", "Done.", T]])
+
+    def test_subagent_transcripts_follow_the_main_rows_under_their_agent_id(self):
+        with tempfile.TemporaryDirectory() as d:
+            main = os.path.join(d, "sess.jsonl")
+            os.makedirs(os.path.join(d, "sess", "subagents"))
+            with open(main, "w", encoding="utf-8") as f:
+                f.write(json.dumps(rec(uuid="u1", type="user", message={"content": "go"})))
+            sub = os.path.join(d, "sess", "subagents", "agent-abc.jsonl")
+            side = {"isSidechain": True, "agentId": "abc"}
+            with open(sub, "w", encoding="utf-8") as f:
+                f.write("\n".join(json.dumps({**rec(uuid=u, **kw), **side}) for u, kw in [
+                    ("s0", dict(type="user", message={"content": "worker_id: T5\ntask: read the spec"})),
+                    ("s1", dict(type="assistant", message={"stop_reason": "end_turn", "content": [{"type": "text", "text": "Done."}]})),
+                ]))
+            with open(os.path.join(d, "sess", "subagents", "agent-abc.meta.json"), "w", encoding="utf-8") as f:
+                json.dump({"description": "T5 controller refactor"}, f)
+            self.assertEqual(
+                list(scan.all_rows(main)),
+                [["u1", "prompt", "go", T], ["s0", "prompt", "T5 controller refactor", T, "abc"], ["s1", "answer", "Done.", T, "abc"]],
+            )
+
     def test_image_with_blank_text_still_yields_a_prompt(self):
         out = scan_rows([rec(uuid="u1", type="user", message={"content": [{"type": "text", "text": "  "}, IMG]})])
         self.assertEqual(out, [["u1", "prompt", "[Image]", T]])
