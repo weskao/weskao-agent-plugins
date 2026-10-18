@@ -1,49 +1,20 @@
 # weskao-agent-plugins
 
-Monorepo Claude Code marketplace: one `.claude-plugin/marketplace.json`, one folder per plugin
-under `plugins/<name>/`.
+Monorepo marketplace: `.claude-plugin/marketplace.json` + `plugins/<name>/`, each with its own
+version and `README.md` (users install one at a time).
 
-## Never edit `plugins/<name>/` here
+- **Never edit `plugins/<name>/`**: `stage` regenerates it from the source (`~/.claude/mods/<name>`,
+  else `~/.claude/skills/<name>`). Testing needs only the source + `/reload-plugins`.
+- **Release** (`make` lists targets; they wrap `~/.claude/skills/marketplace-publish/scripts/publish.py`,
+  whose skill holds the SOP):
 
-Every `plugins/<name>/` is a copy that `publish.py stage` writes from the plugin's source, and
-the next stage overwrites it. Edit the source instead: mods in `~/.claude/mods/<name>`, skills
-in `~/.claude/skills/<name>`.
+  ```bash
+  make notes NAME=<name>              # CHANGELOG `## Unreleased` from template + changes since release
+  make stage NAME=<name> BUMP=patch   # refuses an empty CHANGELOG entry; dates it, copies here
+  make ship M="fix(<name>): ..."      # commit + push + GitHub release <name>-v<version> (public: ask first)
+  ```
 
-## Publish a change
-
-```bash
-make stage NAME=<name> BUMP=patch     # check, copy here, update marketplace.json + README
-make ship M="fix(<name>): ..."        # commit + push + GitHub release (public repo: ask the user first)
-```
-
-Before `stage`, write the release notes under `## Unreleased` in the source's `CHANGELOG.md`;
-`stage` dates the heading (`## <version> — <date>`) and refuses a release without one. After a
-push, `make ship` / `make push` create the GitHub release `<name>-v<version>` from that section
-(`make release` retries; it skips versions already tagged).
-
-To keep a release local for now: `make commit M="..."` (no push), then `make push` when ready.
-
-Day-to-day testing never needs this repo: the source in `~/.claude/mods/<name>` is the installed
-copy on this machine, so edit it and run `/reload-plugins`.
-
-`make status` shows each plugin as `released` or `changed` since its last stage. In Claude Code,
-the `marketplace-publish` skill asks whether (and how) to release after a change.
-
-`make` alone lists every target (`validate`, `status`, `readme`, `check`, `stage`, `form`, `commit`,
-`push`, `ship`, `release`). The
-Makefile wraps `~/.claude/skills/marketplace-publish/scripts/publish.py`; `NAME` is looked up in
-`~/.claude/mods/` then `~/.claude/skills/`.
-
-- Each plugin has its own version (its `plugin.json` and its `marketplace.json` entry), and
-  `make stage` takes one `NAME`, so each plugin gets its own bump level.
-- Users install plugins one at a time (`claude plugin install <name>@weskao-agent-plugins`), so
-  every plugin folder keeps its own `README.md`.
-
-## Keeping `README.md` in sync
-
-- The plugins table between `<!-- plugins:start -->` and `<!-- plugins:end -->` is generated
-  from `marketplace.json`: never hand-edit it. `stage` rewrites it, and the PostToolUse hook in
-  `.claude/settings.json` rewrites it whenever `marketplace.json` is edited
-  (`publish.py readme`).
-- After creating, updating, or deleting any other file, check whether `README.md` needs a
-  matching update (install steps, requirements, license) and update it if so.
+  Local only: `make commit M=...`, later `make push` (also releases). `make release` retries.
+- README: the table between `<!-- plugins:start -->` / `<!-- plugins:end -->` is generated from
+  `marketplace.json` (`stage` or the PostToolUse hook), never hand-edit it. After changing any other
+  file, check whether README needs a matching update (install steps, requirements, license).

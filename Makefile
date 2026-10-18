@@ -4,7 +4,7 @@ P := $(HOME)/.claude/skills/marketplace-publish/scripts/publish.py
 # a plugin's source: a mod in ~/.claude/mods, else a skill in ~/.claude/skills
 SRC = $(firstword $(wildcard $(HOME)/.claude/mods/$(NAME) $(HOME)/.claude/skills/$(NAME)))
 
-.PHONY: help validate status readme check stage form commit push ship release _src
+.PHONY: help validate status readme check stage form notes commit push ship release _src
 
 help: ## list the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  make %-9s %s\n", $$1, $$2}'
@@ -20,6 +20,9 @@ readme: ## regenerate the README plugins table from marketplace.json
 
 check: _src ## run every publish check on a source: make check NAME=prompt-toc
 	python3 "$(P)" check "$(SRC)"
+
+notes: _src ## ready the CHANGELOG Unreleased entry, list changes since release: make notes NAME=prompt-toc
+	python3 "$(P)" notes "$(SRC)" --repo .
 
 stage: _src ## copy a source in: make stage NAME=prompt-toc [BUMP=patch|minor|major]
 	python3 "$(P)" stage "$(SRC)" --repo . $(if $(BUMP),--bump $(BUMP))
