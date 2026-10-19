@@ -24,6 +24,23 @@
         "navigation",
         "toc"
       ]
+    },
+    {
+      "name": "message-clock",
+      "source": "./plugins/message-clock",
+      "description": "Grok-style right-aligned clock on each sent prompt and each reply message",
+      "version": "0.1.0",
+      "author": {
+        "name": "weskao",
+        "url": "https://github.com/weskao"
+      },
+      "license": "MIT",
+      "keywords": [
+        "mod",
+        "clock",
+        "timestamp",
+        "transcript"
+      ]
     }
   ]
 }
