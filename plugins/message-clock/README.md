@@ -17,6 +17,8 @@ Nothing to configure: once installed, the time shows beside each message, in the
 
 `/message-clock-update` updates to the latest version (then restart Claude Code); once a day at most, a toast says when a newer version is published.
 
+![The update toast: message-clock 0.2.0 is available: run /message-clock-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/message-clock/update-toast-message-clock.jpeg)
+
 ![message-clock demo: a resumed session keeps each row's stored time, a new slash command is stamped live](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/message-clock/demo.gif?v=2)
 
 - **Prompts and replies** — each is stamped with the time it was stored, including subagent replies, queued prompts and slash-command echoes.

@@ -22,6 +22,8 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 Once a day at most, a toast says when a newer version is published.
 
+![The update toast: prompt-toc 0.7.0 is available: run /prompt-toc-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/update-toast-prompt-toc.jpeg)
+
 ![prompt-toc demo: click a prompt in the side pane and the transcript scrolls to it](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/demo.gif?v=4)
 
 ### All and Prompts
