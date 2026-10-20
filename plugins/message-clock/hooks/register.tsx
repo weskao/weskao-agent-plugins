@@ -2,6 +2,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { fmt } from './shared/fmt'
 import { classify, commandEcho } from './shared/rows'
 import type { AppendedRow, Row } from './shared/rows'
+import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
 
 export { fmt }
 
@@ -40,10 +41,14 @@ async function restore($: EngineInterface, transcript?: string) {
 export const register: Register = on => {
   // a launch, a reload or a --resume launch; unawaited so a big transcript never holds the first prompt
   on('session.start', async ($, e, next) => {
+    await registerUpdate($)
     const started = await next(e)
     void restore($)
+    notifyUpdate($)
     return started
   })
+
+  on('command.run', { command: 'message-clock-update' }, async $ => ({ text: await runUpdate($) }))
 
   // an in-process /resume raises no session.start, only the settings hooks' SessionStart
   on('classic.SessionStart', async ($, e, next) => {

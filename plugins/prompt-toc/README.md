@@ -18,6 +18,9 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 | `/prompt-toc [keyword]` | Open the pane, optionally filtered to rows containing the keyword |
 | `/prompt-toc-open`, `/prompt-toc-close` | Turn the mod on or off |
 | `/prompt-toc-export [path]` | Write the index as a Markdown file |
+| `/prompt-toc-update` | Update to the latest version (then restart Claude Code) |
+
+Once a day at most, a toast says when a newer version is published.
 
 ![prompt-toc demo: click a prompt in the side pane and the transcript scrolls to it](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/demo.gif?v=4)
 
@@ -46,7 +49,7 @@ Also in the pane:
 
 ## Privacy
 
-The pane is built from the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere.
+The pane is built from the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere. The only network request is the daily version check, a plain GET of the public `marketplace.json` on raw.githubusercontent.com.
 
 ## License
 

@@ -15,6 +15,8 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 Nothing to configure: once installed, the time shows beside each message, in the same gray band as the prompt.
 
+`/message-clock-update` updates to the latest version (then restart Claude Code); once a day at most, a toast says when a newer version is published.
+
 ![message-clock demo: a resumed session keeps each row's stored time, a new slash command is stamped live](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/message-clock/demo.gif?v=2)
 
 - **Prompts and replies** — each is stamped with the time it was stored, including subagent replies, queued prompts and slash-command echoes.
@@ -25,7 +27,7 @@ Nothing to configure: once installed, the time shows beside each message, in the
 
 ## Privacy
 
-Times come from the clock and the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere.
+Times come from the clock and the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere. The only network request is the daily version check, a plain GET of the public `marketplace.json` on raw.githubusercontent.com.
 
 ## License
 

@@ -2,6 +2,14 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 — 2026-10-20
+
+### Added
+
+- **Update reminder and `/prompt-toc-update`.** Once a day at most, a toast says when a newer version is
+  published to weskao-agent-plugins. `/prompt-toc-update` refreshes the marketplace and updates the mod;
+  restart Claude Code to load it.
+
 ## 0.6.1 — 2026-10-20
 
 ### Changed

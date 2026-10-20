@@ -8,6 +8,7 @@ import type { Settings } from './settings'
 import { view } from './filter'
 import { short, toMarkdown } from './export'
 import { classify, commandEcho, headings, isEngineText, oneLine } from './shared/rows'
+import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
 import { cells, cellsOf, clamp, fit, isEdge, lastFirst, step, wrappedRows } from './window'
 
 const OFF = { plugin: 'prompt-toc', key: 'isOff' } as const
@@ -394,6 +395,8 @@ async function exportToc($: EngineInterface, arg: string) {
 }
 
 export const register: Register = (on, options) => {
+  on('command.run', { command: 'prompt-toc-update' }, async $ => ({ text: await runUpdate($) }))
+
   on('command.run', { command: ['prompt-toc-open', 'prompt-toc-close'] }, async ($, e) => {
     const off = e.command === 'prompt-toc-close'
     await $.state.set(OFF, off)
@@ -415,6 +418,7 @@ export const register: Register = (on, options) => {
       await $.command.register({ name: 'prompt-toc-close', description: 'Turn prompt-toc off' })
       await $.command.register({ name: 'prompt-toc-export', description: 'Export the index as a Markdown file', argumentHint: '[path]' })
     } catch {}
+    await registerUpdate($)
     // its own try: a refused registration above must not leave an off mod looking on (default-open would open the pane)
     try {
       if ((await $.store.get('isOff')) === true) await $.state.set(OFF, true)
@@ -439,6 +443,7 @@ export const register: Register = (on, options) => {
       await update($, settings, () => loadSettings(k => options[k]))
     } catch {}
     const started = await next(e)
+    notifyUpdate($)
     // open by default: once per process (a refused open is not retried), never when off, never with focus. This open is unasked, so the host places
     // the pane only on a wide terminal (>= 144 columns, 110 once the person has opened it before) and otherwise
     // holds it undrawn until the window widens; a refused open must not become an unhandled rejection

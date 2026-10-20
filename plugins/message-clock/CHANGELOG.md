@@ -2,6 +2,14 @@
 
 All notable changes to message-clock. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0 — 2026-10-20
+
+### Added
+
+- **Update reminder and `/message-clock-update`.** Once a day at most, a toast says when a newer version is
+  published to weskao-agent-plugins. `/message-clock-update` refreshes the marketplace and updates the mod;
+  restart Claude Code to load it.
+
 ## 0.1.0 — 2026-10-19
 
 ### Added
