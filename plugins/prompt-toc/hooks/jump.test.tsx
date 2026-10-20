@@ -105,7 +105,7 @@ test('an inline pane with more rows than fit spans its whole body, so the chip r
   await ui.unmount()
   // everything fits: no padding, the frame stays as short as the list
   const fits = await mount(200)
-  expect((await fits.drawn()).props).not.toHaveProperty('minHeight', expect.anything())
+  expect(((await fits.drawn()) as { props?: object }).props).not.toHaveProperty('minHeight', expect.anything())
 })
 
 test('the wheel and scroll keys move the window under a toolbar that stays put', async ($, on) => {

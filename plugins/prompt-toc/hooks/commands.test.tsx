@@ -1,8 +1,9 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 const mountPane = ($: Engine) =>
-  $.ui.mount({
+  $.ui.mount<'terminal', 'Pane'>({
     plugin: 'prompt-toc',
     surface: 'terminal',
     component: 'Pane',
@@ -38,31 +39,31 @@ const seed = async ($: Engine) => {
 const ROOT = '/work/proj'
 // the kit has no fs: a tiny in-memory one. A path resolves under ROOT unless a folder is listed in `links`
 // (a symlink pointing elsewhere); `files` holds what already exists, `writes` what the command wrote
-const fsKit = (on: Parameters<Parameters<typeof test>[1]>[1], opts: { files?: string[]; links?: Record<string, string>; dangling?: string[] } = {}) => {
+const fsKit = (on: On, opts: { files?: string[]; links?: Record<string, string>; dangling?: string[] } = {}) => {
   const files = new Set(opts.files ?? [])
   const writes: { path: string; text: string }[] = []
   // the kit hands the hooks paths already made absolute against its own cwd: cut that back to the typed spelling
   // (the command's first fs call is stat('.'), which tells the kit's cwd)
   let base: string | undefined
-  const rel = async (_$: Engine, p: string) => {
+  const rel = (p: string) => {
     base ??= p.replace(/\/\.?$/, '')
     return p === base ? '.' : p.startsWith(`${base}/`) ? p.slice(base.length + 1) : p
   }
   const abs = (p: string) => (p === '.' ? ROOT : `${ROOT}/${p}`)
   on('fs.stat', async ($, e) => {
-    const p = await rel($, (e as { path: string }).path)
+    const p = rel((e as { path: string }).path)
     return { value: { kind: 'dir', size: 0, mtimeMs: 0, isLink: false, realPath: opts.links?.[p] ?? abs(p) } } as never
   })
   // a folder's listing shows a dangling symlink that exists() does not
   on('fs.list', async ($, e) => {
-    const dir = await rel($, (e as { path?: string }).path ?? '.')
+    const dir = rel((e as { path?: string }).path ?? '.')
     const names = [...files, ...(opts.dangling ?? [])].filter(f => (f.includes('/') ? f.slice(0, f.lastIndexOf('/')) : '.') === dir)
     return { value: names.map(f => ({ name: f.slice(f.lastIndexOf('/') + 1), kind: 'other', size: 0, mtimeMs: 0, isLink: true })) } as never
   })
-  on('fs.exists', async ($, e) => ({ value: files.has(await rel($, (e as { path: string }).path)) }) as never)
+  on('fs.exists', async ($, e) => ({ value: files.has(rel((e as { path: string }).path)) }) as never)
   on('fs.write', async ($, e) => {
     const w = e as { path: string; text: string }
-    writes.push({ path: await rel($, w.path), text: w.text })
+    writes.push({ path: rel(w.path), text: w.text })
     return { value: undefined } as never
   })
   return writes
@@ -73,7 +74,7 @@ const run = async ($: Engine, command: string, args = '') => {
   return out.text ?? ''
 }
 
-const openOk = (on: Parameters<Parameters<typeof test>[1]>[1]) => {
+const openOk = (on: On) => {
   on('ui.open', () => ({ value: { isPlaced: true } }) as never)
 }
 
@@ -132,6 +133,21 @@ test('the 🔍 button unfolds a search field that filters as you type, and Enter
   expect(await ui.find({ type: 'Input', key: 'search' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: ' filter: beta ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /^first ask$/ })).toBeUndefined()
+})
+
+test('the open search row fills right of the field with a click layer that leaves the field open', async ($, on) => {
+  mock.session(on)
+  openOk(on)
+  await seed($)
+  const ui = await mountPane($)
+  expect(await ui.find({ key: 'search-row' })).toBeUndefined()
+  await ui.press({ key: 'search-toggle' })
+  // the whole row in cells, not flexGrow (a Client sized by that alone is zero cells wide)
+  expect((await ui.find({ key: 'search-row' }))?.props).toMatchObject({ width: expect.any(Number), height: 1 })
+  expect((await ui.find({ key: 'search-row' }))?.props.width).toBeGreaterThanOrEqual(40)
+  // the focus itself is the engine's: a click must leave the field open
+  await ui.pointer({ type: 'down', x: 3, y: 0, button: 'left', in: 'search-row' })
+  expect(await ui.find({ type: 'Input', key: 'search' })).toBeDefined()
 })
 
 test('the open search field holds the /prompt-toc keyword, and its ✕ clears it', async ($, on) => {

@@ -24,11 +24,19 @@ async function dismiss($: EngineInterface, key?: string) {
     if (!inPopover && (await read($, settingsOpen))) await update($, settingsOpen, () => false)
   } catch {}
 }
+// moves the pane's focus ring onto one of its elements; a deny (the pane not holding the keys) leaves it where it was
+async function focusOn($: EngineInterface, key: string) {
+  try {
+    await $.ui.focus({ requestId: PANE, key })
+  } catch {}
+}
 const OFF_NOTE = 'prompt-toc is off (/prompt-toc-open to turn it on).'
 
 const PANE = 'prompt-toc'
 // the settings popover's click-catching layer (backdrop.ts)
 const BACKDROP = 'settings-backdrop'
+// the same layer spanning the open search row under the field: a click there types in the field, with no hover
+const SEARCH_ROW = 'search-row'
 const TITLE = 'Prompt TOC'
 const OLD_ROW = 'before /compact: not in the transcript anymore'
 const MAX_LABEL = 72
@@ -98,8 +106,8 @@ const splits = (costs: Map<TocEntry, number>, total: number) => {
   return units
 }
 // drawn after a row's label as `41.37%` (at most two decimals, none when whole), under 0.01% as `<0.01%`; the tiers are
-// the statusline's (statusline-command.sh tier_color): 50% or more red, 25% or more yellow, else dim
-const share = (units: number) => ({ label: units === 0 ? '<0.01%' : `${+(units / 100).toFixed(2)}%`, color: units >= 5000 ? ('error' as const) : units >= 2500 ? ('warning' as const) : undefined, isMinor: units < 2500 })
+// the statusline's (statusline-command.sh tier_color): 50% or more red, 25% or more yellow, else the theme's subtle gray (not the time's dim)
+const share = (units: number) => ({ label: units === 0 ? '<0.01%' : `${+(units / 100).toFixed(2)}%`, color: units >= 5000 ? ('error' as const) : units >= 2500 ? ('warning' as const) : ('subtle' as const), isMinor: units < 2500 })
 // a live call's cost in uncached-input tokens (prices relative to it, the same for every model); the live usage has no
 // 5m / 1h split, so a cache write weighs as a 5m one until a rescan reads the split (scan.py)
 const costed = (u: { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; output_tokens: number }): Tokens => ({
@@ -232,7 +240,11 @@ const tidy = (list: TocEntry[]) => {
 // loop at a time, so a subagent's rows never close or replace the main conversation's replies
 const settle = (list: TocEntry[]) => {
   const byAgent = new Map<string, TocEntry[]>()
-  for (const x of list) byAgent.set(x.agent ?? '', [...(byAgent.get(x.agent ?? '') ?? []), x])
+  for (const x of list) {
+    const rows = byAgent.get(x.agent ?? '')
+    if (rows) rows.push(x)
+    else byAgent.set(x.agent ?? '', [x])
+  }
   return [...byAgent.values()].flatMap(rows => cap(tidy(rows)))
 }
 
@@ -243,7 +255,8 @@ const marker = (entry: TocEntry, n: number) => {
   const depth = entry.preview ? 0 : entry.level - 1
   return `${'  '.repeat(depth)}${entry.preview ? '↳' : LEVEL[entry.level]?.glyph}`.padEnd(promptMark(n).length + 2 * depth)
 }
-const keyOf = (x: TocEntry) => (x.divider ? `${x.id}|divider` : `${x.id}|${x.level}|${x.text}`)
+// `at` tells apart two headings of one reply with the same text
+const keyOf = (x: TocEntry) => (x.divider ? `${x.id}|divider` : `${x.id}|${x.level}|${x.at ?? ''}|${x.text}`)
 
 // the address of a reply's `at`-th heading section, drawn by the AssistantMessage hook below
 const sectionKey = (id: string, at: number) => `${PANE}:${id}:${at}`
@@ -657,6 +670,10 @@ export const register: Register = (on, options) => {
     await dismiss($)
     return next(e)
   })
+  on('ui.message', { component: 'Pane', requestId: PANE, element: SEARCH_ROW }, async ($, e, next) => {
+    await focusOn($, 'search')
+    return next(e)
+  })
 
   // the pane is this mod's own, so it draws without next
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -717,12 +734,18 @@ export const register: Register = (on, options) => {
 
     // a new keyword starts the window at the top, as /prompt-toc <keyword> does
     const filterBy = (text: string) => void Promise.all([update($, keyword, () => text), resetWindow($)])
-    // unfolding puts the keys in the field; a deny (the pane not holding the keys) leaves it a click away
+    // folding hands the ring to 🔍 first: left on the field as it goes, the engine re-lands it on the row taking the
+    // field's place in the focus order (the first item), drawn inverted as if selected
+    const foldSearch = async () => {
+      await focusOn($, 'search-toggle')
+      await update($, searchOpen, () => false)
+    }
+    // unfolding puts the keys in the field
     const toggleSearch = async () => {
       try {
-        const isOpen = !(await read($, searchOpen))
-        await update($, searchOpen, () => isOpen)
-        if (isOpen) await $.ui.focus({ requestId: PANE, key: 'search' })
+        if (await read($, searchOpen)) return await foldSearch()
+        await update($, searchOpen, () => true)
+        await focusOn($, 'search')
       } catch {}
     }
 
@@ -819,9 +842,18 @@ export const register: Register = (on, options) => {
         {isSearchOpen && Input ? (
           // one row, like the folded chip below: Enter keeps the filter and folds the field back into that chip
           <Box flexDirection="row">
-            <Box flexGrow={1} flexShrink={1}>
-              <Input key="search" placeholder="filter rows" value={kw} submitLabel="done" onInput={filterBy} onSubmit={() => void update($, searchOpen, () => false)} />
+            {/* the Input takes a click only on its own cells: a pointer layer spans the whole row under it (painted first)
+                and focuses it. Not a blank Button (the pointer inverts it); sized in cells like the settings backdrop, as a
+                Client sized by flexGrow alone drew zero cells wide and caught nothing */}
+            {Client && (
+              <Box position="absolute" top={0} left={0}>
+                <Client key={SEARCH_ROW} module="./backdrop.ts" width={e.props.bodyColumns} height={1} />
+              </Box>
+            )}
+            <Box flexShrink={1}>
+              <Input key="search" placeholder="filter rows" value={kw} submitLabel="done" onInput={filterBy} onSubmit={() => void foldSearch()} />
             </Box>
+            <Box flexGrow={1} />
             {kw && (
               <Button key="filter-clear" plain dimColor hover={CLEAR_HOVER} onPress={() => filterBy('')}>
                 {' ✕ '}
@@ -882,7 +914,7 @@ export const register: Register = (on, options) => {
               </Box>
               {cost && (
                 <Box flexShrink={0} marginLeft={1}>
-                  <Text color={cost.color} weight={cost.color ? 'bold' : 'regular'} dimColor={cost.isMinor || isOld} backgroundColor={bg}>
+                  <Text color={cost.color} weight={cost.isMinor ? 'regular' : 'bold'} dimColor={isOld} backgroundColor={bg}>
                     {cost.label}
                   </Text>
                 </Box>

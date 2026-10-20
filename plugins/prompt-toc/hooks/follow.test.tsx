@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 // follow-viewport: the terminal's onScreen reports on prompt/reply rows move a subtle mark in the pane.
 // The kit never paints a surface: whether the terminal really sends onScreen while scrolling needs a manual check.
@@ -33,7 +34,7 @@ const pane = ($: Engine) =>
   } as never)
 
 // every write of the follow atom, as the state.set chain carries it
-const followWrites = (on: Parameters<Parameters<typeof test>[1]>[1]) => {
+const followWrites = (on: On) => {
   const out: unknown[] = []
   on('state.set', (($: unknown, e: { key: string; value: unknown }, next: (e: unknown) => unknown) => {
     if (e.key === 'following') out.push(e.value)
@@ -43,7 +44,7 @@ const followWrites = (on: Parameters<Parameters<typeof test>[1]>[1]) => {
 }
 
 // stands for the engine's own drawing of a message (and any plugin beneath, e.g. message-clock)
-const engine = (on: Parameters<Parameters<typeof test>[1]>[1]) =>
+const engine = (on: On) =>
   on('ui.render', { component: ['UserMessage', 'AssistantMessage'] }, ($, e) => ({ type: 'Text', children: [`engine:${e.props.text}`] }) as never)
 
 const underlined = async (ui: Awaited<ReturnType<typeof pane>>) =>
@@ -81,7 +82,7 @@ test('the topmost on-screen entry is written once, after one coalesced timer', a
   expect(writes).toHaveLength(0)
   await clock.advance(100)
   // list order is transcript order: the reply's heading is above the later prompt
-  expect(writes).toEqual(['a1|2|Plan'])
+  expect(writes).toEqual(['a1|2|0|Plan'])
   expect(await underlined(ui)).toEqual(['Plan'])
 
   // a scroll tick that only moves the rows of a row already on screen schedules nothing, writes nothing
@@ -93,7 +94,7 @@ test('the topmost on-screen entry is written once, after one coalesced timer', a
   // the reply scrolls off: the next prompt becomes the position
   await a1.redraw({ text: '## Plan\nx', isFirstOfReply: true, onScreen: null } as never)
   await clock.advance(100)
-  expect(writes).toEqual(['a1|2|Plan', 'u2|0|second'])
+  expect(writes).toEqual(['a1|2|0|Plan', 'u2|0||second'])
   expect(await underlined(ui)).toEqual(['second'])
 
   // a row entering below the top, its end still off screen, changes nothing on top: the timer runs, no re-write
@@ -218,9 +219,9 @@ test('a session end cancels the pending write; /clear resets the mark', async ($
   await c1.redraw({ text: 'first', isFirstOfReply: true, onScreen: null } as never)
   await $.session.end({ reason: 'other', sessionId: 's' } as never)
   await clock.advance(100)
-  expect(writes).toEqual(['c1|0|first'])
+  expect(writes).toEqual(['c1|0||first'])
   await $.session.end({ reason: 'clear', sessionId: 's' } as never)
-  expect(writes).toEqual(['c1|0|first', ''])
+  expect(writes).toEqual(['c1|0||first', ''])
 })
 
 test('/clear resets the keyword filter', async ($, on) => {
@@ -248,10 +249,10 @@ test('classic.PostCompact clears the follow memory of rows that left without a n
   await prompt($, 'm2', 'second')
   await row($, 'UserMessage', 'm1', 'first', { first: 0, last: 2, of: 3 })
   await clock.advance(100)
-  expect(writes).toEqual(['m1|0|first'])
+  expect(writes).toEqual(['m1|0||first'])
   // the compact drops m1's screen memory: m2 entering is now the only on-screen row, so the mark moves to it
   await $.classic.PostCompact({ trigger: 'manual', compact_summary: 's' } as never)
   await row($, 'UserMessage', 'm2', 'second', { first: 0, last: 2, of: 3 })
   await clock.advance(100)
-  expect(writes).toEqual(['m1|0|first', 'm2|0|second'])
+  expect(writes).toEqual(['m1|0||first', 'm2|0||second'])
 })

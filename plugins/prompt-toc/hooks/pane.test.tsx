@@ -99,3 +99,32 @@ test('highlights the pressed entry', async ($, on) => {
   expect(rest).toHaveLength(0)
   expect(band?.text).toContain('second')
 })
+
+// two headings of one reply with the same text are two rows: pressing one bands that one only
+test('pressing one of two same-text headings in a reply highlights only that row', async ($, on) => {
+  mock.session(on)
+  on('ui.toast', () => ({ value: undefined }) as never)
+  await $.session.append({
+    door: 'prompt',
+    origin: { kind: 'composer' },
+    uuid: 'u1',
+    message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'a prompt' }] },
+  } as never)
+  await $.session.append({
+    door: 'response',
+    origin: { kind: 'model', model: 'm' },
+    uuid: 'a1',
+    message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: '## Notes\none\n## Notes\ntwo' }] },
+  } as never)
+  const ui = await $.ui.mount({
+    plugin: 'prompt-toc',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'prompt-toc',
+    props: { title: 'prompt-toc', isFocused: false, bodyColumns: 60, placement: 'dock' },
+  } as never)
+  expect((await ui.findAll({ type: 'Button', text: /^Notes$/ })).map(b => b.key)).toEqual(['toc-1', 'toc-2'])
+  await ui.press({ key: 'toc-2' })
+  const bands = (await ui.findAll({ type: 'Box' })).filter(b => b.props.backgroundColor === 'userMessageBackground' && b.props.position !== 'absolute')
+  expect(bands).toHaveLength(1)
+})

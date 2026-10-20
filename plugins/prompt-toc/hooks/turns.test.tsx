@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 const mountPane = ($: Engine) =>
   $.ui.mount({
@@ -75,7 +76,7 @@ const prompt = ($: Engine, uuid: string, text: string) =>
   } as never)
 
 // one API call per usage, answered by the test's turn.step hook (registered before the first $ call)
-const steps = (on: Parameters<Parameters<typeof test>[1]>[1], usages: object[]) => {
+const steps = (on: On, usages: object[]) => {
   const queue = [...usages]
   on('turn.step', async function* ($, e) {
     return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage: { model: 'm', ...queue.shift() } } as never
@@ -91,7 +92,7 @@ const steps = (on: Parameters<Parameters<typeof test>[1]>[1], usages: object[]) 
 // cost in uncached-input tokens: input 1, cache read 0.1, cache write 1.25, output 5
 const use = (input: number, output = 0, read = 0, write = 0) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: read, cache_creation_input_tokens: write })
 
-const startWith = (on: Parameters<Parameters<typeof test>[1]>[1], $: Engine) => {
+const startWith = (on: On, $: Engine) => {
   on('session.start', () => ({ cwd: '/t' }) as never)
   on('command.register', () => ({ value: undefined }) as never)
   on('tool.register', () => ({ value: undefined }) as never)
@@ -116,7 +117,7 @@ test("a prompt shows its turn's share of the session's cost", async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /≈ 600 tokens \(cost-weighted\)/ })).toBeDefined()
 })
 
-test('a share is bold red from 50%, bold yellow from 25%, and dim under 25%', async ($, on) => {
+test('a share is bold red from 50%, bold yellow from 25%, and subtle gray under 25%', async ($, on) => {
   mock.session(on)
   const step = steps(on, [use(600), use(300), use(90), use(10)])
   for (const id of ['u1', 'u2', 'u3', 'u4']) {
@@ -126,8 +127,8 @@ test('a share is bold red from 50%, bold yellow from 25%, and dim under 25%', as
   const ui = await mountPane($)
   expect((await ui.find({ type: 'Text', text: '60%' }))?.props).toMatchObject({ color: 'error', weight: 'bold' })
   expect((await ui.find({ type: 'Text', text: '30%' }))?.props).toMatchObject({ color: 'warning', weight: 'bold' })
-  expect((await ui.find({ type: 'Text', text: '9%' }))?.props).toMatchObject({ dimColor: true })
-  expect((await ui.find({ type: 'Text', text: '1%' }))?.props).toMatchObject({ dimColor: true })
+  expect((await ui.find({ type: 'Text', text: '9%' }))?.props).toMatchObject({ color: 'subtle', dimColor: false })
+  expect((await ui.find({ type: 'Text', text: '1%' }))?.props).toMatchObject({ color: 'subtle', dimColor: false })
 })
 
 // at most two decimals, trailing zeros dropped; a share under 0.01% reads `<0.01%`
@@ -140,7 +141,7 @@ test('a share draws up to two decimals and `<0.01%` below that', async ($, on) =
   }
   const ui = await mountPane($)
   expect(await ui.find({ type: 'Text', text: '100%' })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: '<0.01%' }))?.props).toMatchObject({ dimColor: true })
+  expect((await ui.find({ type: 'Text', text: '<0.01%' }))?.props).toMatchObject({ color: 'subtle', dimColor: false })
 })
 
 // largest remainder: the rounded shares always add up to exactly 100%

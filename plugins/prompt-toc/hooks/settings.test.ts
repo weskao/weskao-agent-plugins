@@ -19,7 +19,7 @@ test('a non-boolean stored value is ignored', () => {
 
 test('every popover item is labelled with a capital first letter, in drawing order', () => {
   expect(KEYS).toEqual(['openByDefault', 'showTime', 'showTokens'])
-  for (const k of KEYS) expect(LABELS[k][0]).toBe(LABELS[k][0].toUpperCase())
+  for (const k of KEYS) expect(LABELS[k].charAt(0)).toBe(LABELS[k].charAt(0).toUpperCase())
 })
 
 test('toggleSetting flips one key and returns a new object', () => {

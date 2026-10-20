@@ -11,9 +11,11 @@ export type Tokens = { input: number; cacheRead: number; cacheWrite: number; out
 // The pane's user settings: each is a userConfig field of the plugin (a /config row), absent = its default.
 // Defined here, not imported: the types contract must be self-contained (`claude plugin validate`).
 export type Settings = { showTime: boolean; showTokens: boolean; openByDefault: boolean }
+// inside the block below a bare `Settings` is claude-code's own (an untyped record): name ours by another name there
+export type TocSettings = Settings
 
 declare module 'claude-code' {
   interface PluginState {
-    'prompt-toc': { isOff: boolean; entries: TocEntry[]; selected: string; following: string; settings: Settings; settingsOpen: boolean; promptsOnly: boolean; keyword: string; searchOpen: boolean; winTop: number; autoOpened: boolean; foldOld: boolean }
+    'prompt-toc': { isOff: boolean; entries: TocEntry[]; selected: string; following: string; settings: TocSettings; settingsOpen: boolean; promptsOnly: boolean; keyword: string; searchOpen: boolean; winTop: number; autoOpened: boolean; foldOld: boolean }
   }
 }

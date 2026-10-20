@@ -2,6 +2,20 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.1 — 2026-10-20
+
+### Changed
+
+- **Low cost shares are subtle gray.** A share under 25% now uses the theme's subtle color in regular
+  weight, so it no longer matches the dim time beside it.
+- **The whole filter row takes the click.** Pressing anywhere on the open `filter rows` row, out to the
+  pane's right edge, focuses the field; the row no longer highlights on hover.
+
+### Fixed
+
+- Pressing one of two same-text headings in a reply no longer highlights both.
+- Grouping rows by agent is faster on large sessions (5,000 rows: 6.9 ms to 0.06 ms).
+
 ## 0.6.0 — 2026-10-20
 
 ### Added

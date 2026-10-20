@@ -1,4 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
+import type { Engine } from 'claude-code/testing'
+// the test runtime has timers; the es2023 lib the type check uses does not declare them
+declare function setTimeout(fn: (value: unknown) => void, ms: number): unknown
 
 test('mcp__prompt-toc__pane opens and closes the pane', async ($, on) => {
   const calls: string[] = []
@@ -81,7 +85,7 @@ test('a row drawn after the session changed rebuilds the index from the new sess
 const settle = () => new Promise(r => setTimeout(r, 25))
 
 // open by default: session.start opens the pane unfocused once, only when the openByDefault option is ON and the mod is not off
-const boot = async ($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], seed: Record<string, unknown>, refuse = false, refuseCommand = '') => {
+const boot = async ($: Engine, on: On, seed: Record<string, unknown>, refuse = false, refuseCommand = '') => {
   const opens: unknown[] = []
   const kv = new Map(Object.entries(seed))
   on('store.get', (_$, e) => ({ value: kv.get((e as { key: string }).key) }) as never)

@@ -3,7 +3,7 @@ import type { Engine } from 'claude-code/testing'
 
 const T0 = Date.parse('2026-01-02T03:04:05Z')
 const mountPane = ($: Engine) =>
-  $.ui.mount({
+  $.ui.mount<'terminal', 'Pane'>({
     plugin: 'prompt-toc',
     surface: 'terminal',
     component: 'Pane',
@@ -235,3 +235,22 @@ for (const [os, isMac, label] of [['macOS', true, ' 🔍 '], ['Windows / Linux',
     expect(await ui.find({ type: 'Button', key: 'search-toggle', text: label })).toBeDefined()
   })
 }
+
+// the blur's dismiss is deferred to a timer: a host refusing timers leaves the popover open, never fails the drawing
+test('a refused timer on blur leaves the popover open and the pane still drawn', async ($, on) => {
+  mock.session(on)
+  store(on)
+  config(on)
+  on('ui.scroll', () => ({}) as never)
+  on('clock.after', () => ({ deny: 'no timers here' }) as never)
+  await start($, on)
+  await prompt($, 'u1', 'a prompt')
+  const ui = await mountPane($)
+  const focused = (isFocused: boolean) => ({ title: 'prompt-toc', isFocused, bodyColumns: 80, placement: 'dock' }) as never
+
+  await ui.redraw(focused(true))
+  await ui.press({ key: 'settings-toggle' })
+  await ui.redraw(focused(false))
+  expect(await ui.find({ type: 'Button', text: /^a prompt$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /Show time/ })).toBeDefined()
+})
