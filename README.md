@@ -16,8 +16,8 @@ Mods need Claude Code 2.1.287 or later.
 <!-- plugins:start -->
 | Plugin | Version | What it does | Install |
 | --- | --- | --- | --- |
-| [`prompt-toc`](./plugins/prompt-toc) | 0.7.0 | Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export | `claude plugin install prompt-toc@weskao-agent-plugins` |
-| [`message-clock`](./plugins/message-clock) | 0.2.0 | Grok-style right-aligned clock on each sent prompt and each reply message | `claude plugin install message-clock@weskao-agent-plugins` |
+| [`prompt-toc`](./plugins/prompt-toc) | 0.7.1 | Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export | `claude plugin install prompt-toc@weskao-agent-plugins` |
+| [`message-clock`](./plugins/message-clock) | 0.2.1 | Grok-style right-aligned clock on each sent prompt and each reply message | `claude plugin install message-clock@weskao-agent-plugins` |
 <!-- plugins:end -->
 
 ## License

@@ -15,7 +15,7 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 Nothing to configure: once installed, the time shows beside each message, in the same gray band as the prompt.
 
-`/message-clock-update` updates to the latest version (then restart Claude Code); once a day at most, a toast says when a newer version is published.
+`/message-clock-update` updates to the latest version (then restart Claude Code); at each session start a toast says when a newer version is published (the version list is fetched at most every 10 minutes).
 
 ![The update toast: message-clock 0.2.0 is available: run /message-clock-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/message-clock/update-toast-message-clock.jpeg)
 
@@ -29,7 +29,7 @@ Nothing to configure: once installed, the time shows beside each message, in the
 
 ## Privacy
 
-Times come from the clock and the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere. The only network request is the daily version check, a plain GET of the public `marketplace.json` on raw.githubusercontent.com.
+Times come from the clock and the session transcript already on your disk (`scripts/scan.py` reads it). Nothing is sent anywhere. The only network request is the version check (at most every 10 minutes), a plain GET of the public `marketplace.json` on raw.githubusercontent.com.
 
 ## License
 

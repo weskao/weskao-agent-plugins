@@ -5,8 +5,10 @@ import type { EngineInterface } from 'claude-code'
 // (the local dev marketplace, --plugin-dir) has no upstream to compare with: it is never checked or updated
 export const MARKETPLACE = 'weskao-agent-plugins'
 const CATALOG = `https://raw.githubusercontent.com/weskao/${MARKETPLACE}/main/.claude-plugin/marketplace.json`
-const DAY = 24 * 60 * 60 * 1000
-const CHECKED = 'updateCheckedAt'
+// update-kit's default (ai-accounts); a raw.githubusercontent.com GET has no API rate limit and is CDN-cached ~5 min
+const TTL = 10 * 60 * 1000
+// { at, latest }: the last fetch's time and result, reused until TTL so every session start inside it still toasts
+const CHECK = 'updateCheck'
 
 // >0 when a is newer; dotted numbers only, a pre-release suffix (`-beta`) is ignored
 export const cmpVersion = (a: string, b: string): number => {
@@ -22,19 +24,23 @@ export const cmpVersion = (a: string, b: string): number => {
 // an installed plugin lives under plugins/cache/<marketplace>/<name>/<version>
 export const isPublished = (root: string) => root.includes(`/${MARKETPLACE}/`)
 
-// the newer upstream version, at most one fetch a day; undefined when current, unpublished, offline or unparsable
+// the newer upstream version, at most one fetch per TTL; undefined when current, unpublished, offline or unparsable
 export async function checkUpdate($: EngineInterface, now = Date.now(), root = $.plugin.root): Promise<string | undefined> {
   if (!isPublished(root)) return
-  const last = (await $.store.get(CHECKED)) as number | undefined
-  if (last !== undefined && now - last < DAY) return
-  // stamped before the fetch: a failing network is not retried on every launch
-  await $.store.set(CHECKED, now)
   try {
     const local = JSON.parse((await $.fs.read(`${root}/.claude-plugin/plugin.json`)) as string).version as string
-    const res = await $.http.fetch(CATALOG)
-    if (!res.ok) return
-    const plugins = JSON.parse(res.text).plugins as { name: string; version?: string }[]
-    const latest = plugins.find(p => p.name === $.plugin.name)?.version
+    const last = (await $.store.get(CHECK)) as { at?: number; latest?: string } | undefined
+    let latest = last?.latest
+    // a clock that moved backwards refetches instead of trusting the entry
+    if (typeof last?.at !== 'number' || now - last.at < 0 || now - last.at >= TTL) {
+      // stamped before the fetch: a failing network is not retried on every launch
+      await $.store.set(CHECK, { at: now })
+      const res = await $.http.fetch(CATALOG)
+      if (!res.ok) return
+      const plugins = JSON.parse(res.text).plugins as { name: string; version?: string }[]
+      latest = plugins.find(p => p.name === $.plugin.name)?.version
+      await $.store.set(CHECK, { at: now, latest })
+    }
     return latest && local && cmpVersion(latest, local) > 0 ? latest : undefined
   } catch {
     return
@@ -55,7 +61,7 @@ export async function runUpdate($: EngineInterface, root = $.plugin.root): Promi
       return `\`${argv.join(' ')}\` could not run (${String(err)}). Run it in a terminal instead.`
     }
   }
-  await $.store.delete(CHECKED)
+  await $.store.delete(CHECK)
   return `${out.filter(Boolean).join('\n')}\nRestart Claude Code to load the new ${$.plugin.name}.`
 }
 

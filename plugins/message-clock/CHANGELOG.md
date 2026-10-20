@@ -2,6 +2,13 @@
 
 All notable changes to message-clock. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 — 2026-10-20
+
+### Changed
+
+- **Update check every 10 minutes instead of once a day.** The marketplace version list is fetched at most every
+  10 minutes and the result is reused in between, so every session start toasts while a newer version is pending.
+
 ## 0.2.0 — 2026-10-20
 
 ### Added

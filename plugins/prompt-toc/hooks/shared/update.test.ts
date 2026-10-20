@@ -45,12 +45,23 @@ test('only a copy installed from the public marketplace counts as published', ()
   expect(isPublished('/home/u/.claude/mods/demo')).toBe(false)
 })
 
-test('checkUpdate reports a newer version, then waits a day before fetching again', async () => {
+test('checkUpdate reports a newer version on every call, fetching at most once per 10 minutes', async () => {
   const f = fake({ latest: '0.2.0' })
   expect(await checkUpdate(f.$, 1_000)).toBe('0.2.0')
+  expect(await checkUpdate(f.$, 2_000)).toBe('0.2.0')
+  expect(f.fetches()).toBe(1)
+  expect(await checkUpdate(f.$, 1_000 + 10 * 60 * 1000)).toBe('0.2.0')
+  expect(f.fetches()).toBe(2)
+  // a clock set backwards refetches
+  expect(await checkUpdate(f.$, 500)).toBe('0.2.0')
+  expect(f.fetches()).toBe(3)
+})
+
+test('checkUpdate does not retry a failed fetch inside the 10 minutes', async () => {
+  const f = fake({ latest: '9.0.0', ok: false })
+  expect(await checkUpdate(f.$, 1_000)).toBeUndefined()
   expect(await checkUpdate(f.$, 2_000)).toBeUndefined()
   expect(f.fetches()).toBe(1)
-  expect(await checkUpdate(f.$, 1_000 + 24 * 60 * 60 * 1000)).toBe('0.2.0')
 })
 
 test('checkUpdate stays quiet when current, offline, or unpublished', async () => {
@@ -61,11 +72,11 @@ test('checkUpdate stays quiet when current, offline, or unpublished', async () =
   expect(dev.fetches()).toBe(0)
 })
 
-test('runUpdate refreshes the marketplace, updates the plugin and clears the daily stamp', async () => {
-  const f = fake({ store: { updateCheckedAt: 5 } })
+test('runUpdate refreshes the marketplace, updates the plugin and clears the cached check', async () => {
+  const f = fake({ store: { updateCheck: { at: 5, latest: '0.2.0' } } })
   expect(await runUpdate(f.$)).toContain('Restart Claude Code')
   expect(f.runs).toEqual([`claude plugin marketplace update ${MARKETPLACE}`, `claude plugin update demo@${MARKETPLACE}`])
-  expect(f.kv.has('updateCheckedAt')).toBe(false)
+  expect(f.kv.has('updateCheck')).toBe(false)
 })
 
 test('runUpdate stops at the first failing command and shows its error', async () => {
