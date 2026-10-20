@@ -93,6 +93,55 @@ class ScanTest(unittest.TestCase):
                 [["u1", "prompt", "go", T], ["s0", "prompt", "T5 controller refactor", T, "abc"], ["s1", "answer", "Done.", T, "abc"]],
             )
 
+    def test_turn_tokens_follow_each_prompt_counting_each_call_once(self):
+        def call(uuid, mid, out, text=None):
+            content = [{"type": "text", "text": text}] if text else [{"type": "tool_use", "id": uuid, "name": "Bash", "input": {}}]
+            usage = {"input_tokens": 10, "cache_read_input_tokens": 100, "cache_creation_input_tokens": 4, "output_tokens": out}
+            return rec(uuid=uuid, type="assistant", message={"id": mid, "content": content, "usage": usage})
+        out = scan_rows([
+            rec(uuid="u1", type="user", message={"content": "one"}),
+            call("a1", "m1", 1, "Checking."), call("a2", "m1", 7), call("a3", "m2", 3, "Done."),
+            rec(uuid="u2", type="user", message={"content": "two"}),
+        ])
+        self.assertEqual(out, [
+            ["u1", "prompt", "one", T], ["a1", "reply", "Checking.", T], ["a3", "reply", "Done.", T],
+            # input, cache read, cache write, output, then the cost-weighted sum: 20 + 200*0.1 + 8*1.25 + 10*5
+            ["u1", "tokens", "20 200 8 10 100", ""], ["u2", "prompt", "two", T],
+        ])
+
+    @staticmethod
+    def answer(uuid, mid, usage, text="Done."):
+        return rec(uuid=uuid, type="assistant", message={"id": mid, "stop_reason": "end_turn", "content": [{"type": "text", "text": text}], "usage": usage})
+
+    # a background agent's hand-back starts a turn with no prompt row: its usage goes to that turn's own answer
+    def test_a_turn_after_the_prompts_answer_counts_toward_its_own_answer(self):
+        u = {"input_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 2}
+        # a 1h cache write weighs 2, a 5m one 1.25
+        bg = {"input_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 12,
+              "cache_creation": {"ephemeral_5m_input_tokens": 4, "ephemeral_1h_input_tokens": 8}, "output_tokens": 1}
+        out = scan_rows([
+            rec(uuid="u1", type="user", message={"content": "one"}),
+            self.answer("a1", "m1", u),
+            rec(uuid="n1", type="user", origin={"kind": "task-notification"}, message={"content": "<task-notification>done</task-notification>"}),
+            self.answer("a2", "m2", bg, "Agent finished."),
+            rec(uuid="u2", type="user", message={"content": "two"}),
+        ])
+        self.assertEqual(out, [
+            ["u1", "prompt", "one", T], ["a1", "answer", "Done.", T],
+            ["u1", "tokens", "10 0 0 2 20", ""], ["a2", "answer", "Agent finished.", T],
+            ["a2", "tokens", "0 0 12 1 26", ""], ["u2", "prompt", "two", T],
+        ])
+
+    # no answer text to carry it: the turn's usage goes back to the prompt as a second tokens row
+    def test_a_background_turn_with_no_answer_counts_toward_the_prompt(self):
+        u = {"input_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 0}
+        tool = rec(uuid="a2", type="assistant", message={"id": "m2", "stop_reason": "tool_use", "content": [{"type": "tool_use", "id": "t", "name": "Bash", "input": {}}], "usage": u})
+        out = scan_rows([rec(uuid="u1", type="user", message={"content": "one"}), self.answer("a1", "m1", u), tool])
+        self.assertEqual(out, [
+            ["u1", "prompt", "one", T], ["a1", "answer", "Done.", T],
+            ["u1", "tokens", "10 0 0 0 10", ""], ["u1", "tokens", "10 0 0 0 10", ""],
+        ])
+
     def test_image_with_blank_text_still_yields_a_prompt(self):
         out = scan_rows([rec(uuid="u1", type="user", message={"content": [{"type": "text", "text": "  "}, IMG]})])
         self.assertEqual(out, [["u1", "prompt", "[Image]", T]])

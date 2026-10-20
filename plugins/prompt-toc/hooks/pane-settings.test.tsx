@@ -135,7 +135,8 @@ test('"Open pane on start" is drawn above "Show time", starts ON and mirrors to 
   const labels = (await ui.findAll({ type: 'Button', text: /\[[ x]\] / })).map(b => String((b as { text?: string }).text ?? ''))
   expect(await ui.find({ type: 'Button', text: /\[x\] Open pane on start/ })).toBeDefined()
   expect(await ui.find({ type: 'Button', text: /\[x\] Show time/ })).toBeDefined()
-  expect(labels.length).toBe(2)
+  expect(await ui.find({ type: 'Button', text: /\[x\] Show cost share/ })).toBeDefined()
+  expect(labels.length).toBe(3)
   expect(labels[0]).toMatch(/Open pane on start/)
   expect('prompt-toc.openByDefault' in sets).toBe(false)
 

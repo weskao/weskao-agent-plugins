@@ -10,6 +10,9 @@ description (.meta.json).
 kind 'compact': the /compact boundary marker, text = its trigger ('manual' | 'auto'); the post-compact summary
 user row (isCompactSummary) is skipped.
 iso: the record's transcript timestamp ('' when absent).
+kind 'tokens': after a turn, the tokens its API calls used, text = 'INPUT CACHE_READ CACHE_WRITE OUTPUT COST' (COST: the
+cost-weighted sum in uncached-input tokens); uuid = the turn's prompt, or for a turn no prompt started (a background
+agent's hand-back) its answer; iso = ''. A prompt can get two (a later promptless turn with no answer text).
 
   scan.py SESSION_ID [TRANSCRIPT]   # TRANSCRIPT defaults to <config dir>/projects/*/SESSION_ID.jsonl
 """
@@ -44,7 +47,46 @@ def prompt_of(content) -> str:
     return text
 
 
+# each token's price relative to an uncached input token: Anthropic's ratios, the same for every model
+READ, WRITE_5M, WRITE_1H, OUT = 0.1, 1.25, 2, 5
+
+
+# the turn's usage, one per API call: a call's content blocks are separate records sharing message.id, the last
+# record holding its final usage
+def tokens(owner: str | None, usage: dict):
+    if owner and usage:
+        total, cost = [0, 0, 0, 0], 0.0
+        for u in usage.values():
+            fresh, read, write, out = (u.get(k) or 0 for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "output_tokens"))
+            hour = (u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens") or 0
+            total = [a + b for a, b in zip(total, (fresh, read, write, out))]
+            cost += fresh + READ * read + WRITE_1H * hour + WRITE_5M * (write - hour) + OUT * out
+        yield [owner, "tokens", " ".join(map(str, [*total, round(cost)])), ""]
+
+
+# owner: the row a turn's usage counts toward, its prompt or, for a turn that starts after the prompt's turn answered
+# (no prompt row), that turn's answer (None until it arrives; with none, the prompt)
 def rows(path: str, side: bool = False):
+    prompt = owner = None
+    usage, done = {}, False
+    for row in turns(path, side):
+        if row[1] == "usage":
+            if done:
+                yield from tokens(owner, usage)
+                owner, usage, done = None, {}, False
+            usage[row[2]] = row[3]
+            continue
+        if row[1] == "prompt":
+            yield from tokens(owner or prompt, usage)
+            prompt = owner = row[0]
+            usage, done = {}, False
+        elif row[1] == "answer":
+            owner, done = owner or row[0], True
+        yield row
+    yield from tokens(owner or prompt, usage)
+
+
+def turns(path: str, side: bool):
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             # cheap prefilter: most lines are tool calls/results and progress records; a subagent's file is all sidechain
@@ -78,6 +120,8 @@ def rows(path: str, side: bool = False):
                     yield [uuid, "compact", (r.get("compactMetadata") or {}).get("trigger") or "", ts]
             elif kind == "assistant":
                 msg = r.get("message") or {}
+                if msg.get("id") and isinstance(msg.get("usage"), dict):
+                    yield [uuid, "usage", msg["id"], msg["usage"]]
                 text = text_of(msg.get("content"))
                 lines = [ln for ln in text.split("\n") if KEEP.match(ln)]
                 reply = "answer" if msg.get("stop_reason") == "end_turn" else "reply"

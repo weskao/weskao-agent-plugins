@@ -2,6 +2,20 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.0 — 2026-10-20
+
+### Added
+
+- **Cost share per prompt.** Each prompt row ends with its share of the session's token cost, e.g.
+  `41.37%` (up to two decimals, rows add up to exactly 100%; bold red from 50%, bold yellow from 25%, dim under that, as in the statusline), and the footer shows the cost-weighted total.
+  Tokens are weighted by price (cache read 0.1, cache write 1.25 or 2, output 5, relative to
+  uncached input), so the heaviest row is the one that cost the most, not the one with the most
+  tokens. A background agent's hand-back turn shows its own share on its answer, a subagent's run
+  counts toward the prompt that started it, and a subagent's view shares out that agent's total.
+  The *Show cost share* setting (⚙ and `/config`, on by default) turns it off;
+  `/prompt-toc-export` adds each prompt's in / cache read / cache write / out. It counts live as
+  the turn runs, and a rescan reads the same from the transcript.
+
 ## 0.5.0 — 2026-10-18
 
 ### Changed

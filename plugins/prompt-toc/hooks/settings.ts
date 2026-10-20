@@ -6,6 +6,7 @@ export type { Settings }
 export const LABELS: Record<keyof Settings, string> = {
   openByDefault: 'Open pane on start',
   showTime: 'Show time',
+  showTokens: 'Show cost share',
 }
 export const KEYS = Object.keys(LABELS) as (keyof Settings)[]
 

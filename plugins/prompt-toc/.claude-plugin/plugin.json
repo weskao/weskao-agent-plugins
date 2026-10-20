@@ -1,6 +1,6 @@
 {
   "name": "prompt-toc",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export",
   "author": { "name": "weskao", "url": "https://github.com/weskao" },
   "license": "MIT",
@@ -17,6 +17,12 @@
       "type": "boolean",
       "title": "Show time",
       "description": "Draw the time of each prompt in the Prompt TOC pane",
+      "default": true
+    },
+    "showTokens": {
+      "type": "boolean",
+      "title": "Show cost share",
+      "description": "Draw each prompt's share of the session's token cost (cache reads weigh less, output more) in the Prompt TOC pane",
       "default": true
     }
   }

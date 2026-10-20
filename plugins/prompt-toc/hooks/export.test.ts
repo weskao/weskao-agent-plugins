@@ -28,3 +28,9 @@ test('title becomes a top heading and time is omitted when ts is absent', () => 
 test('empty list gives just a newline', () => {
   expect(toMarkdown([])).toBe('\n')
 })
+
+// the pane shows one cost share per row; the export carries what it is made of
+test("a row's tokens follow its text as in / cache read / cache write / out", () => {
+  const md = toMarkdown([{ id: 'a', level: 0, text: 'Hi', tokens: { input: 100, cacheRead: 12_345, cacheWrite: 8, output: 1500, cost: 9000 } }])
+  expect(md).toBe('1. Hi `in 100 · cache read 12k · cache write 8 · out 1.5k`\n')
+})

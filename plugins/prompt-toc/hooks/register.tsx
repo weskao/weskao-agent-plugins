@@ -1,12 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
-import type { TocEntry } from '../types'
+import type { TocEntry, Tokens } from '../types'
 import { fmt } from './shared/fmt'
 import { DEFAULTS, KEYS, LABELS, loadSettings, toggleSetting } from './settings'
 import type { Settings } from './settings'
 import { view } from './filter'
-import { toMarkdown } from './export'
+import { short, toMarkdown } from './export'
 import { classify, commandEcho, headings, isEngineText, oneLine } from './shared/rows'
 import { cells, cellsOf, clamp, fit, isEdge, lastFirst, step, wrappedRows } from './window'
 
@@ -86,6 +86,36 @@ const CLEAR_HOVER = { scope: 'filter-clear', color: 'inverseText', backgroundCol
 const autoOpened = atom({ plugin: 'prompt-toc', key: 'autoOpened' } as const, false)
 // a prompt's time is drawn after its label as a space and HH:MM:SS
 const TIME_CELLS = 9
+// a row's share of the list's cost in hundredths of a percent, by largest remainder so the rows add up to exactly 100%
+const splits = (costs: Map<TocEntry, number>, total: number) => {
+  const raw = [...costs].map(([x, cost]) => [x, (cost / total) * 10000] as const)
+  const units = new Map(raw.map(([x, r]) => [x, Math.floor(r)]))
+  let left = 10000 - [...units.values()].reduce((a, b) => a + b, 0)
+  for (const [x] of [...raw].sort((a, b) => (b[1] % 1) - (a[1] % 1))) {
+    if (left-- <= 0) break
+    units.set(x, (units.get(x) ?? 0) + 1)
+  }
+  return units
+}
+// drawn after a row's label as `41.37%` (at most two decimals, none when whole), under 0.01% as `<0.01%`; the tiers are
+// the statusline's (statusline-command.sh tier_color): 50% or more red, 25% or more yellow, else dim
+const share = (units: number) => ({ label: units === 0 ? '<0.01%' : `${+(units / 100).toFixed(2)}%`, color: units >= 5000 ? ('error' as const) : units >= 2500 ? ('warning' as const) : undefined, isMinor: units < 2500 })
+// a live call's cost in uncached-input tokens (prices relative to it, the same for every model); the live usage has no
+// 5m / 1h split, so a cache write weighs as a 5m one until a rescan reads the split (scan.py)
+const costed = (u: { input_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number; output_tokens: number }): Tokens => ({
+  input: u.input_tokens,
+  cacheRead: u.cache_read_input_tokens,
+  cacheWrite: u.cache_creation_input_tokens,
+  output: u.output_tokens,
+  cost: u.input_tokens + 0.1 * u.cache_read_input_tokens + 1.25 * u.cache_creation_input_tokens + 5 * u.output_tokens,
+})
+const plus = (a: Tokens | undefined, b: Tokens): Tokens =>
+  a ? { input: a.input + b.input, cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite, output: a.output + b.output, cost: a.cost + b.cost } : b
+// per loop ('' = the main conversation): its prompt's turn has answered, so a turn before the next prompt is a promptless
+// one (a background agent's hand-back) whose steps' tokens wait in `pending` until its answer. Module memory: a reload
+// loses it, and the rescan a reload runs reads the same from the transcript
+const answered = new Set<string>()
+const pending = new Map<string, { tokens: Tokens; since?: string }>()
 
 // a reply's lines in the pane stop at this many terminal cells (a CJK character takes two), the rest drawn as '...'
 const MAX_REPLY_CELLS = 60
@@ -94,6 +124,28 @@ const MAX_REPLY_CELLS = 60
 // `level === 0 / > 0` test ever mistakes it for either
 const DIVIDER_LEVEL = -1
 const isPromptEntry = (x: TocEntry) => !x.divider && x.level === 0
+
+// the cost of each row of one loop's list: its own turns' and, in the main list, each subagent's run on the main prompt
+// before its start (the agent's first entry, its task); a row with none is absent
+const costs = (all: readonly TocEntry[], list: readonly TocEntry[], isMain: boolean) => {
+  const out = new Map<TocEntry, number>()
+  const add = (x: TocEntry, n: number) => n > 0 && out.set(x, (out.get(x) ?? 0) + n)
+  for (const x of list) if (x.tokens) add(x, x.tokens.cost)
+  if (!isMain) return out
+  const runs = new Map<string, { ts?: number; cost: number }>()
+  for (const x of all) {
+    if (!x.agent) continue
+    const run = runs.get(x.agent) ?? { ts: x.ts, cost: 0 }
+    run.cost += x.tokens?.cost ?? 0
+    runs.set(x.agent, run)
+  }
+  const prompts = list.filter(x => isPromptEntry(x) && x.ts !== undefined)
+  for (const { ts, cost } of runs.values()) {
+    const owner = ts === undefined ? undefined : prompts.findLast(x => (x.ts ?? Infinity) <= ts)
+    if (owner) add(owner, cost)
+  }
+  return out
+}
 
 // a prompt row → one level-0 entry; a reply row → its headings, or one preview line where it has none (an answer row,
 // the reply that ended its turn, the same marked final); a compact row → one divider (rescan rows arrive as stored,
@@ -223,12 +275,24 @@ async function rescan($: EngineInterface, transcript?: string) {
     const argv = ['python3', `${$.plugin.root}/scripts/scan.py`, sid, ...(transcript ? [transcript] : [])]
     const ran = await $.process.run(argv, { timeoutMs: 20000 })
     if (ran.exitCode !== 0) return
-    const rows = JSON.parse(ran.stdout) as [string, 'prompt' | 'reply' | 'answer' | 'compact', string, string?, string?][]
+    const rows = JSON.parse(ran.stdout) as [string, 'prompt' | 'reply' | 'answer' | 'compact' | 'tokens', string, string?, string?][]
+    // a tokens row follows a turn: 'INPUT CACHE_READ CACHE_WRITE OUTPUT COST' for the first entry of that uuid (a prompt,
+    // or a promptless turn's answer), summed where a uuid has two
+    const spent = new Map<string, Tokens>()
+    for (const [id, kind, text] of rows) {
+      const n = kind === 'tokens' && typeof text === 'string' ? text.split(' ').map(Number) : []
+      const [input = 0, cacheRead = 0, cacheWrite = 0, output = 0, cost = 0] = n
+      if (n.length === 5 && n.every(Number.isFinite)) spent.set(id, plus(spent.get(id), { input, cacheRead, cacheWrite, output, cost }))
+    }
+    const given = new Set<string>()
     // the transcript's iso time as epoch ms, the unit $.clock.now() gives live rows; '' / unparsable = no time
     // a kind this mod does not know is skipped, and so is a non-string text: one bad row must not throw away the whole rebuild
     const scanned = rows.flatMap(([id, kind, text, iso, agent]) => {
       const at = Date.parse(iso ?? '')
       return typeof text === 'string' && (kind === 'prompt' || kind === 'reply' || kind === 'answer' || kind === 'compact') ? toEntries(id, kind, text, Number.isNaN(at) ? undefined : at, agent) : []
+    }).map(x => {
+      const tokens = spent.get(x.id)
+      return tokens && !given.has(x.id) && given.add(x.id) ? { ...x, tokens } : x
     })
     const seen = new Set(scanned.map(keyOf))
     await update($, entries, list => {
@@ -402,6 +466,8 @@ export const register: Register = (on, options) => {
     flush = undefined
     shown.clear()
     ended.clear()
+    answered.clear()
+    pending.clear()
     indexedFor = undefined
     // the pane stays open across session ends: /clear starts the index empty, /resume refills it (classic.SessionStart below)
     if (e.reason === 'clear' || e.reason === 'resume') {
@@ -462,6 +528,31 @@ export const register: Register = (on, options) => {
           return settle([...list, ...found.filter(x => !seen.has(keyOf(x)))])
         })
       }
+      // a new prompt: the loop's next steps are its turn's
+      if (found.some(isPromptEntry)) answered.delete(e.agentId ?? '')
+    } catch {}
+    return result
+  })
+
+  // each API call of a turn (main, or a subagent's) adds its usage to the loop's latest prompt, or after that prompt's
+  // turn answered, to the promptless turn's held tokens (see `answered`); a rescan reads the same from the transcript
+  // and replaces it
+  // turn.step streams: yield* forwards the chunks untouched and evaluates to the result
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+    try {
+      const loop = e.agentId ?? ''
+      if (result.usage && answered.has(loop)) {
+        const held = pending.get(loop)
+        const last = held ? undefined : (await read($, entries)).findLast(x => x.agent === e.agentId)
+        pending.set(loop, { tokens: plus(held?.tokens, costed(result.usage)), since: held ? held.since : last && keyOf(last) })
+      } else if (result.usage) {
+        const add = costed(result.usage)
+        await update($, entries, list => {
+          const last = list.findLast(x => x.agent === e.agentId && isPromptEntry(x))
+          return last ? list.map(x => (x === last ? { ...x, tokens: plus(x.tokens, add) } : x)) : list
+        })
+      }
     } catch {}
     return result
   })
@@ -475,6 +566,19 @@ export const register: Register = (on, options) => {
         const last = list.findLast(x => x.agent === e.agentId)
         return last && !last.divider && last.level > 0 && !last.final ? list.map(x => (x.id === last.id ? { ...x, final: true as const } : x)) : list
       })
+      // a promptless turn's held tokens go on its answer (the reply's first entry), or with no new reply on the prompt
+      const loop = e.agentId ?? ''
+      const held = pending.get(loop)
+      pending.delete(loop)
+      answered.add(loop)
+      if (held) {
+        await update($, entries, list => {
+          const mine = list.filter(x => x.agent === e.agentId)
+          const last = mine.at(-1)
+          const owner = last && !last.divider && last.level > 0 && keyOf(last) !== held.since ? mine.find(x => x.id === last.id) : mine.findLast(isPromptEntry)
+          return owner ? list.map(x => (x === owner ? { ...x, tokens: plus(x.tokens, held.tokens) } : x)) : list
+        })
+      }
     } catch {}
     return result
   })
@@ -578,7 +682,8 @@ export const register: Register = (on, options) => {
     )
     if (await isOff($)) return <Text dimColor>prompt-toc is off (/prompt-toc-open).</Text>
     // one loop at a time: the agent whose transcript is in view, else the main conversation
-    const list = (await read($, entries)).filter(x => x.agent === e.props.view?.agentId)
+    const all = await read($, entries)
+    const list = all.filter(x => x.agent === e.props.view?.agentId)
     const current = await read($, selected)
     const followed = await read($, following)
     const prefs = await read($, settings)
@@ -655,6 +760,14 @@ export const register: Register = (on, options) => {
     const isNoMatch = list.length > 0 && !visible.some(x => !x.divider)
     const prompts = list.filter(isPromptEntry).length
     const titled = list.filter(x => x.level > 0 && !x.preview).length
+    // each row's share of the list's cost-weighted tokens (Show cost share)
+    const costOf = costs(all, list, e.props.view?.agentId === undefined)
+    const total = [...costOf.values()].reduce((a, b) => a + b, 0)
+    const units = total > 0 ? splits(costOf, total) : new Map<TocEntry, number>()
+    const shareOf = (x: TocEntry) => {
+      const u = prefs.showTokens ? units.get(x) : undefined
+      return u === undefined ? undefined : share(u)
+    }
     // rows above the last divider are from before a /compact: still listed, but no longer in the transcript to scroll to
     const lastDivider = visible.findLastIndex(x => x.divider)
 
@@ -662,7 +775,8 @@ export const register: Register = (on, options) => {
     // footer and its gap (the settings popover is absolute: it adds no rows)
     const heights = visible.map((entry, i) => {
       if (entry.divider) return 1
-      const width = Math.max(1, e.props.bodyColumns - cells(marker(entry, numbers.get(entry) ?? 0)) - (prefs.showTime && entry.ts !== undefined ? TIME_CELLS : 0))
+      const cost = shareOf(entry)
+      const width = Math.max(1, e.props.bodyColumns - cells(marker(entry, numbers.get(entry) ?? 0)) - (prefs.showTime && entry.ts !== undefined ? TIME_CELLS : 0) - (cost ? 1 + cells(cost.label) : 0))
       return wrappedRows(entry.text, width) + (isPromptEntry(entry) && i > 0 ? 1 : 0)
     })
     if (list.length > 0) heights.push(2)
@@ -748,6 +862,7 @@ export const register: Register = (on, options) => {
           const bg = keyOf(entry) === current ? 'userMessageBackground' : undefined
           // the follow mark is subtler than a press's band, and a pressed row shows only the band
           const isFollowed = !bg && keyOf(entry) === followKey
+          const cost = shareOf(entry)
           return (
             // marker and label side by side: a Button holds only text, so a wrapped label hangs under its own first column
             <Box key={`row-${i}`} flexDirection="row" marginTop={isP && i > 0 ? 1 : 0} backgroundColor={bg}>
@@ -765,6 +880,13 @@ export const register: Register = (on, options) => {
                   </Text>
                 </Button>
               </Box>
+              {cost && (
+                <Box flexShrink={0} marginLeft={1}>
+                  <Text color={cost.color} weight={cost.color ? 'bold' : 'regular'} dimColor={cost.isMinor || isOld} backgroundColor={bg}>
+                    {cost.label}
+                  </Text>
+                </Box>
+              )}
               {prefs.showTime && entry.ts !== undefined && (
                 <Box flexShrink={0} marginLeft={1}>
                   <Text dimColor backgroundColor={bg}>{fmt(entry.ts)}</Text>
@@ -775,7 +897,7 @@ export const register: Register = (on, options) => {
         })}
         {list.length > 0 && end === heights.length && (
           <Box marginTop={1}>
-            <Text dimColor>{`${prompts} prompts · ${titled} headings${isPromptsOnly && titled > 0 ? ' hidden' : ''}`}</Text>
+            <Text dimColor>{`${prompts} prompts · ${titled} headings${isPromptsOnly && titled > 0 ? ' hidden' : ''}${prefs.showTokens && total > 0 ? ` · ≈ ${short(Math.round(total))} tokens (cost-weighted)` : ''}`}</Text>
           </Box>
         )}
         {isSettingsOpen && Client && (

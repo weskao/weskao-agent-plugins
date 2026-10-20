@@ -169,6 +169,6 @@ test('the accent colour marks the active view, the open settings and a checked t
   await ui.press({ key: 'settings-toggle' })
   expect(await pill(ui, /Settings/)).toHaveLength(1)
   // every setting is on by default: each [x] carries the accent, and no [ ] is drawn to carry it
-  expect(await accented(ui, /\[x\]/)).toHaveLength(2)
+  expect(await accented(ui, /\[x\]/)).toHaveLength(3)
   expect(await accented(ui, /\[ \]/)).toHaveLength(0)
 })
