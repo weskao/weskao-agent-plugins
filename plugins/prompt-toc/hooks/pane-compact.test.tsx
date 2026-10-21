@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './testkit'
 import type { Engine } from 'claude-code/testing'
 // the test runtime has timers; the es2023 lib the type check uses does not declare them
 declare function setTimeout(fn: (value: unknown) => void, ms: number): unknown

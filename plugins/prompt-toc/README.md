@@ -38,7 +38,7 @@ The chips at the top of the pane switch between two views of the same session.
 
 ![The Prompts view: one numbered, timed row per prompt](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/pane-prompts.jpeg?v=2)
 
-In both views, rows above a `/compact` are dimmed under a `── compacted ──` divider; press *▴ hide earlier* to fold them away. The `↑ top · ↓ end` buttons jump to either end of the list, and `▲ up` / `down ▼` beside them move it a page at a time (for touch terminals that tap but send no wheel, such as an iPhone SSH app). They show in the docked and the inline pane alike.
+In both views, rows above a `/compact` are dimmed under a `── compacted ──` divider; press *▴ hide earlier* to fold them away. The `▲ top · ▼ end` buttons jump to either end of the list (they work for touch terminals that tap but send no wheel, such as an iPhone SSH app). They show in the docked and the inline pane alike.
 
 Open a subagent's transcript (from the tasks list) and the pane lists that agent instead: its task (the Agent call's description) as the prompt, then the final reply of each of its turns. Switch back and the main conversation returns. `/prompt-toc-export` writes the main conversation only.
 

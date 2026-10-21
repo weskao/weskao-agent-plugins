@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './testkit'
 import type { Engine } from 'claude-code/testing'
 
 // 30 one-line prompts: about 60 rows with the gaps between them
@@ -34,11 +35,11 @@ test('shows only the jump that leads somewhere: top once the window left the sta
   await fill($)
   const ui = await mountAt($, 0)
   expect(await ui.find({ type: 'Button', text: /top/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Button', text: ' ↓ end ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: ' ▼ end ' })).toBeDefined()
 
   await scrollBy($, 5)
-  expect(await ui.find({ type: 'Button', text: ' ↑ top ' })).toBeDefined()
-  expect(await ui.find({ type: 'Button', text: ' ↓ end ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: ' ▲ top ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: ' ▼ end ' })).toBeDefined()
 
   await ui.press({ key: 'jump-end' })
   expect(await ui.find({ type: 'Button', text: /top/ })).toBeDefined()
@@ -70,23 +71,6 @@ test('each jump moves the pane window to its end, asking the engine nothing', as
   expect(toasts).toHaveLength(0)
 })
 
-// a touch terminal taps but sends no wheel: ▲ / ▼ page the pane's own window as a page key does
-test('the page chips move the window a page at a time, tapped', async ($, on) => {
-  mock.session(on)
-  await fill($)
-  const ui = await mountAt($, 0)
-  expect(await ui.find({ type: 'Button', key: 'page-up' })).toBeUndefined()
-  const page = await entryRows(ui)
-  await ui.press({ key: 'page-down' })
-  const next = await entryRows(ui)
-  expect(Number(next[0]?.split(' ')[1])).toBe(Number(page.at(-1)?.split(' ')[1]) + 1)
-  expect(await ui.find({ type: 'Button', key: 'page-up' })).toBeDefined()
-  await ui.press({ key: 'page-up' })
-  expect(await entryRows(ui)).toEqual(page)
-  await ui.press({ key: 'jump-end' })
-  expect(await ui.find({ type: 'Button', key: 'page-down' })).toBeUndefined()
-})
-
 // an inline pane's frame fits its tree: the chip band (absolute at the body's last row) shows only while the tree spans it
 test('an inline pane with more rows than fit spans its whole body, so the chip row is in the frame', async ($, on) => {
   mock.session(on)
@@ -101,7 +85,7 @@ test('an inline pane with more rows than fit spans its whole body, so the chip r
     } as never)
   const ui = await mount(11)
   expect(await ui.drawn()).toMatchObject({ props: { minHeight: 11 } })
-  expect(await ui.find({ type: 'Button', key: 'page-down' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'jump-end' })).toBeDefined()
   await ui.unmount()
   // everything fits: no padding, the frame stays as short as the list
   const fits = await mount(200)

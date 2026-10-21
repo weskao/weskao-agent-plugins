@@ -2,6 +2,12 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.8.0 — 2026-10-21
+
+### Changed
+
+- **Removed the `▲ up` / `down ▼` page chips.** The jump chips now carry their glyphs: `▲ top · ▼ end`.
+
 ## 0.7.1 — 2026-10-20
 
 ### Changed

@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './testkit'
 
 test('indexes typed prompts and reply headings in its pane', async ($, on) => {
   mock.session(on)

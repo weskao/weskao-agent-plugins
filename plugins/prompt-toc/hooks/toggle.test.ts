@@ -1,4 +1,5 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+import { test } from './testkit'
 
 test('/prompt-toc-close and /prompt-toc-open answer and flip the switch', async ($, on) => {
   mock.store(on)

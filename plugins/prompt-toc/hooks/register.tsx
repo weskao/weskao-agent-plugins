@@ -958,28 +958,16 @@ export const register: Register = (on, options) => {
         {isPaged && (
           // a dim chip on a subtle band at the window's bottom right: it covers only its own cells, brightens on hover;
           // the padding sits inside each label so the whole band, not just the glyphs, presses and lights
-          // ▲ / ▼ page the window as the wheel does: a touch terminal (an iPhone SSH app under tmux) delivers taps but no
-          // wheel ticks, and the engine's arrow keys never scroll a tree that fits its window, as this pane's always does
           <Box position="absolute" top={scroll.bodyRows - 1} right={0} flexDirection="row" backgroundColor="userMessageBackground">
             {toTop && (
-              <Button key="page-up" plain dimColor onPress={() => void update($, winTop, cur => step(heights, cur, -budget, budget))}>
-                {' ▲ up '}
-              </Button>
-            )}
-            {toTop && (
               <Button key="jump-top" plain dimColor onPress={() => void update($, winTop, () => 0)}>
-                {' ↑ top '}
+                {' ▲ top '}
               </Button>
             )}
             {toTop && toEnd && <Text dimColor>·</Text>}
             {toEnd && (
               <Button key="jump-end" plain dimColor onPress={() => void update($, winTop, () => lastFirst(heights, budget))}>
-                {' ↓ end '}
-              </Button>
-            )}
-            {toEnd && (
-              <Button key="page-down" plain dimColor onPress={() => void update($, winTop, cur => step(heights, cur, budget, budget))}>
-                {' down ▼ '}
+                {' ▼ end '}
               </Button>
             )}
           </Box>
