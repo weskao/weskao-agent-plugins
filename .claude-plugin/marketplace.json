@@ -41,6 +41,25 @@
         "timestamp",
         "transcript"
       ]
+    },
+    {
+      "name": "agent-toggle",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/weskao/agent-toggle.git",
+        "path": "mod"
+      },
+      "description": "Toggle skills, agents, rules, plugins and MCP servers from a pane (needs the agent-toggle CLI: uv tool install agent-toggle)",
+      "author": {
+        "name": "weskao",
+        "url": "https://github.com/weskao"
+      },
+      "license": "MIT",
+      "keywords": [
+        "mod",
+        "pane",
+        "toggle"
+      ]
     }
   ]
 }

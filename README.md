@@ -18,7 +18,12 @@ Mods need Claude Code 2.1.287 or later.
 | --- | --- | --- | --- |
 | [`prompt-toc`](./plugins/prompt-toc) | 0.8.0 | Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export | `claude plugin install prompt-toc@weskao-agent-plugins` |
 | [`message-clock`](./plugins/message-clock) | 0.2.1 | Grok-style right-aligned clock on each sent prompt and each reply message | `claude plugin install message-clock@weskao-agent-plugins` |
+| [`agent-toggle`](https://github.com/weskao/agent-toggle/tree/HEAD/mod) | [latest](https://github.com/weskao/agent-toggle/releases/latest) | Toggle skills, agents, rules, plugins and MCP servers from a pane (needs the agent-toggle CLI: uv tool install agent-toggle) | `claude plugin install agent-toggle@weskao-agent-plugins` |
 <!-- plugins:end -->
+
+`agent-toggle` is released from [its own repo](https://github.com/weskao/agent-toggle), not staged
+here. The mod drives the `agent-toggle` CLI, so install that first (`uv tool install agent-toggle`);
+`/agent-toggle update` then updates the CLI and the mod together.
 
 ## License
 
