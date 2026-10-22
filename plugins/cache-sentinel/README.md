@@ -31,7 +31,7 @@ Each line names the tokens and an estimated cost (`[?]` when the model's price i
 
 Two guards:
 
-- **Model switch** — a switch on a warm cache above 100,000 context tokens asks for confirmation (`MODEL_SWITCH_GUARD_TOKENS=<n>` in `settings.json` `env` changes the threshold). Every switch is logged to `~/.claude/cache/model-switch-<YYYY-MM>.jsonl`.
+- **Model switch** — `/model` on a warm cache above 100,000 context tokens is stopped once with the tokens and cost it would re-write; a second `/model` within a minute goes through (`MODEL_SWITCH_GUARD_TOKENS=<n>` in `settings.json` `env` changes the threshold). Every `/model` is logged to `~/.claude/cache/model-switch-<YYYY-MM>.jsonl`. A switch made without `/model` is not guarded.
 - **Subagent wait** — a subagent's cache lives 5 minutes, so a foreground Bash call with `timeout` over 240,000 ms is refused with the fix: a shorter timeout, or `run_in_background` and polling.
 
 `/cache-sentinel-close` turns the band and toasts off (the guards stay), `/cache-sentinel-open` turns them back on; the choice is kept across sessions. `/cache-sentinel-update` updates to the latest version (then restart Claude Code); at each session start a toast says when a newer version is published (the version list is fetched at most every 10 minutes).

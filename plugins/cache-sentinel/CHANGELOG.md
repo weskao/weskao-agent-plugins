@@ -2,6 +2,19 @@
 
 All notable changes to cache-sentinel. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.1 — 2026-10-23
+
+### Changed
+
+- README demo GIF and band screenshots.
+
+### Fixed
+
+- **The model-switch guard stops a warm `/model` again.** It waited on the `classic.PreModelSwitch` hook, which
+  Claude Code's built-in `cc-plugin-sec-default` sends past every user-installed mod, so it never asked. `/model` on a
+  warm cache above the threshold now answers once with the tokens and cost a switch would re-write, and a second
+  `/model` within a minute opens the picker. A switch made without `/model` is not guarded.
+
 ## 0.1.0 — 2026-10-22
 
 ### Added

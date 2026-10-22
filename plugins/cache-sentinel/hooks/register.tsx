@@ -2,7 +2,6 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 import type { Cmd, Snap } from '../types'
-import type { ClassicEventOf } from 'claude-code'
 import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
 
 const OFF = { plugin: 'cache-sentinel', key: 'isOff' } as const
@@ -21,11 +20,13 @@ const WARN_MS = 5 * MIN
 const SWITCH = /^\s*(\/(?:model|effort|fast))(?:\s|$)/
 const GUARD_TOKENS = 100_000 // MODEL_SWITCH_GUARD_TOKENS overrides: ask before a warm switch above it
 const WAIT_MS = 4 * MIN // a subagent's cache lives 5m: one foreground Bash wait past this re-writes its whole context
+const CONFIRM_MS = MIN // a second /model within this goes through the guard
 
 type Prices = { prices: Record<string, number>; fallback_price: number }
 let prices: Prices | null = null // read once per load; the file changes rarely and a reload re-reads it
 let lastKey = ''
 let isTicking = false
+let warnedAt: number | undefined // the last /model the guard stopped; module-local, so a reload re-arms it
 // hint kinds (⏳ ❄) already toasted this idle gap; turn.complete clears it, so each pops once per gap
 const toasted = new Set<string>()
 
@@ -85,7 +86,10 @@ async function setCmd($: EngineInterface, text: string) {
   if (c !== (await read($, cmd))) await update($, cmd, () => c)
 }
 
-type Switch = ClassicEventOf['classic.PreModelSwitch']
+type Switch = {
+  session_id: string; from_model: string; to_model: string | null; requested_model: string | null; source: 'command'
+  context_tokens: number; prompt_cache_warm: boolean; cache_ttl: '5m' | '1h' | null; estimated_cache_write_usd: number | null
+}
 
 // one JSON line per switch, the shape cache-roi.py's `guard` section reads (hooks/model-switch-guard.sh wrote it before)
 async function logSwitch($: EngineInterface, e: Switch, threshold: number, decision: 'ask' | 'allow') {
@@ -104,19 +108,29 @@ async function logSwitch($: EngineInterface, e: Switch, threshold: number, decis
 }
 
 export const register: Register = on => {
-  // the model-switch guard: ask before a switch that forfeits a warm cache above the threshold
-  on('classic.PreModelSwitch', async ($, e, next) => {
+  // the model-switch guard: classic.PreModelSwitch never reaches a user-tier mod (the built-in cc-plugin-sec-default sends
+  // classic.* past it), so /model itself is the gate: a warm switch above the threshold is stopped once, and a second
+  // /model within CONFIRM_MS opens the picker. shortcut: a switch made outside /model (the picker's own shortcut) is not seen
+  on('command.run', { command: 'model' }, async ($, e, next) => {
     const raw = (await $.env.get('MODEL_SWITCH_GUARD_TOKENS')) ?? ''
     const min = /^\d+$/.test(raw) ? Number(raw) : GUARD_TOKENS
-    const ask = e.prompt_cache_warm && e.context_tokens > min
-    await logSwitch($, e, min, ask ? 'ask' : 'allow')
-    const below = await next(e)
-    if (!ask || below.permissionDecision === 'deny') return below
-    return {
-      ...below,
-      permissionDecision: 'ask',
-      permissionDecisionReason: `context ${e.context_tokens} tokens，換 model 重寫 cache 約 $${e.estimated_cache_write_usd.toFixed(2)}；建議先 /compact`,
+    const [s, now] = await Promise.all([read($, snap), $.clock.now()])
+    if (warnedAt !== undefined && now - warnedAt <= CONFIRM_MS) {
+      warnedAt = undefined
+      return next(e)
     }
+    const isWarm = s !== null && now < s.endedAt + s.ttlMs
+    const ask = isWarm && s.tokens > min
+    const target = e.args.trim() || null
+    await logSwitch($, {
+      session_id: await $.session.id(), from_model: await $.session.model(), to_model: target, requested_model: target, source: 'command',
+      context_tokens: s?.tokens ?? 0, prompt_cache_warm: isWarm, cache_ttl: s ? (s.ttlMs > 5 * MIN ? '1h' : '5m') : null,
+      estimated_cache_write_usd: s?.usd ?? null,
+    }, min, ask ? 'ask' : 'allow')
+    if (!ask) return next(e)
+    warnedAt = now
+    const usd = s.usd === null ? '' : ` 約 $${s.usd.toFixed(2)}`
+    return { text: `cache-sentinel: context ${s.tokens} tokens，換 model 重寫 cache${usd}；建議先 /compact。${CONFIRM_MS / 1000} 秒內再下一次 /model 繼續。` }
   }).catch(($, e, next) => next(e))
 
   // a subagent (agentId set) blocking on one Bash call past WAIT_MS comes back to a cold cache: refuse, it backgrounds and polls instead
