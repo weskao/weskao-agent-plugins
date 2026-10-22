@@ -130,7 +130,7 @@ export const register: Register = on => {
     if (!ask) return next(e)
     warnedAt = now
     const usd = s.usd === null ? '' : ` 約 $${s.usd.toFixed(2)}`
-    return { text: `cache-sentinel: context ${s.tokens} tokens，換 model 重寫 cache${usd}；建議先 /compact。${CONFIRM_MS / 1000} 秒內再下一次 /model 繼續。` }
+    return { text: `context ${s.tokens} tokens，換 model 重寫 cache${usd}；建議先 /compact。${CONFIRM_MS / 1000} 秒內再下一次 /model 繼續。` }
   }).catch(($, e, next) => next(e))
 
   // a subagent (agentId set) blocking on one Bash call past WAIT_MS comes back to a cold cache: refuse, it backgrounds and polls instead

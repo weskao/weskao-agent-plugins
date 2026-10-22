@@ -2,6 +2,14 @@
 
 All notable changes to cache-sentinel. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.2 — 2026-10-23
+
+### Fixed
+
+- The `/model` warning no longer opens with `cache-sentinel: cache-sentinel:`; Claude Code already names the mod.
+- The plugin description says what the model-switch guard does now: it stops the first `/model`, and a second within a
+  minute goes through.
+
 ## 0.1.1 — 2026-10-23
 
 ### Changed

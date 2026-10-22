@@ -36,6 +36,8 @@ test('/model on a warm cache above the default threshold warns first, a second /
   const { files, clock } = engine(on)
   await $.turn.complete(turn)
   const first = await $.command.run(model)
+  // the engine already prefixes the plugin name to a command answer
+  expect(first.text).not.toMatch(/^cache-sentinel:/)
   expect(first.text).toMatch(/142000 tokens.*\$1\.42.*\/compact/)
   expect(files[LOG]).toMatch(/"context_tokens":142000.*"threshold":100000,"decision":"ask"/)
   expect((await $.command.run(model)).text).toBe('picker')

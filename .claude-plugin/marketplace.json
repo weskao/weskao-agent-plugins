@@ -64,8 +64,8 @@
     {
       "name": "cache-sentinel",
       "source": "./plugins/cache-sentinel",
-      "description": "Warns above the prompt and in a toast before a /model, /effort or /fast switch or an idle gap re-writes the prompt cache, with tokens and est. USD; asks before a warm switch above MODEL_SWITCH_GUARD_TOKENS and refuses a subagent Bash timeout over 4 min.",
-      "version": "0.1.1",
+      "description": "Warns above the prompt and in a toast before a /model, /effort or /fast switch or an idle gap re-writes the prompt cache, with tokens and est. USD; stops the first /model on a warm cache above MODEL_SWITCH_GUARD_TOKENS (a second within a minute goes through) and refuses a subagent Bash timeout over 4 min.",
+      "version": "0.1.2",
       "author": {
         "name": "weskao",
         "url": "https://github.com/weskao"
