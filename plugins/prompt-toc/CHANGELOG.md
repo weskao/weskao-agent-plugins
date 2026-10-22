@@ -2,6 +2,18 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.8.1 — 2026-10-22
+
+### Fixed
+
+- **The `── compacted ──` divider appears after a live `/compact` again.** It waited on the
+  `classic.PostCompact` / `classic.SessionStart` hooks, which Claude Code's built-in
+  `cc-plugin-sec-default` sends past every user-installed mod, so it only showed after a reload
+  or `/prompt-toc`. The pane now rescans when the context fill reported by the session falls by
+  more than half, the signature of a finished compaction, and clears the follow memory of the
+  rows the compact removed. Those two dead hooks are gone; an in-process `/resume` keeps
+  rebuilding the index from the first row of the new session drawn on screen.
+
 ## 0.8.0 — 2026-10-21
 
 ### Changed

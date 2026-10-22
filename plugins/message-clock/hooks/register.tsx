@@ -23,10 +23,14 @@ const withEmptyContents = <T extends { message: { content: AppendedRow['message'
 
 // rows stored before this process (resume, reload, a --resume launch) were never appended here: their time is the
 // transcript's own; a row already stamped live keeps its stamp (prompt-toc's rescan keeps the same rule, so both agree)
+// the session whose transcript was last restored; set before the scan so a turn during it never starts another
+let restoredFor: string | undefined
 async function restore($: EngineInterface, transcript?: string) {
   try {
+    const sid = await $.session.id()
+    restoredFor = sid
     // shortcut: needs python3 on PATH; rows appended live are stamped without it
-    const argv = ['python3', `${$.plugin.root}/scripts/scan.py`, await $.session.id(), ...(transcript ? [transcript] : [])]
+    const argv = ['python3', `${$.plugin.root}/scripts/scan.py`, sid, ...(transcript ? [transcript] : [])]
     const ran = await $.process.run(argv, { timeoutMs: 20000 })
     if (ran.exitCode !== 0) return
     for (const [uuid, iso, echo] of JSON.parse(ran.stdout) as [string, string, string][]) {
@@ -50,10 +54,15 @@ export const register: Register = on => {
 
   on('command.run', { command: 'message-clock-update' }, async $ => ({ text: await runUpdate($) }))
 
-  // an in-process /resume raises no session.start, only the settings hooks' SessionStart
-  on('classic.SessionStart', async ($, e, next) => {
+  // an in-process /resume raises no session.start, and classic.SessionStart never reaches a user-tier mod (the built-in
+  // cc-plugin-sec-default sends classic.* past the user tier): the first main-loop turn of a session not yet restored is
+  // the signal; unawaited as at startup
+  on('turn.start', async ($, e, next) => {
+    if (e.agentId !== undefined) return next(e)
     const result = await next(e)
-    if (e.source === 'resume') void restore($, e.transcript_path)
+    try {
+      if ((await $.session.id()) !== restoredFor) void restore($)
+    } catch {}
     return result
   })
 

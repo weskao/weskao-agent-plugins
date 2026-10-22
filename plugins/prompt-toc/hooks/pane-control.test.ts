@@ -33,22 +33,6 @@ test('keeps its pane open on every session end', async ($, on) => {
   expect(calls).toEqual([])
 })
 
-test('/resume rebuilds the index from the resumed transcript', async ($, on) => {
-  on('session.id', () => ({ value: 'resumed' }) as never)
-  on('classic.SessionStart', () => ({}) as never)
-  const argv: string[][] = []
-  on('process.run', ($, e) => {
-    argv.push([...(e as { argv: string[] }).argv])
-    return { value: { exitCode: 0, stdout: '[]', stderr: '' } } as never
-  })
-  await $.classic.SessionStart({ source: 'startup' } as never)
-  await $.classic.SessionStart({ source: 'resume', transcript_path: '/t/resumed.jsonl' } as never)
-  // the rescan runs unawaited: let it reach process.run
-  for (let i = 0; i < 50 && argv.length === 0; i++) await Promise.resolve()
-  expect(argv).toHaveLength(1)
-  expect(argv[0]?.slice(2)).toEqual(['resumed', '/t/resumed.jsonl'])
-})
-
 // live, the in-process /resume's SessionStart may never reach the mod: the first resumed row drawn on screen rebuilds the
 // index from the session now running, so the open pane shows it without a close and reopen
 test('a row drawn after the session changed rebuilds the index from the new session', async ($, on) => {

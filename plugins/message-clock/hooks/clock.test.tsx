@@ -298,7 +298,7 @@ test('stamps a built-in command\'s echo whatever door stores it (/clear, /model)
 test('restores every stored row\'s time from the transcript on /resume', async ($, on) => {
   mock.session(on)
   on('session.id', () => ({ value: 'resumed' }) as never)
-  on('classic.SessionStart', () => ({}) as never)
+  on('turn.start', ($, e) => ({ turnId: (e as { turnId: string }).turnId }) as never)
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>{(e.props as { text: string }).text}</Text>
@@ -326,9 +326,9 @@ test('restores every stored row\'s time from the transcript on /resume', async (
       props: component === 'UserMessage' ? { text, origin: { kind: 'unclassified' }, isExpanded: false } : { text, isFirstOfReply: true },
     } as never)
 
-  // a startup SessionStart restores nothing (session.start, which shares restore(), answers that one)
-  await $.classic.SessionStart({ source: 'startup' } as never)
-  await $.classic.SessionStart({ source: 'resume', transcript_path: '/t/resumed.jsonl' } as never)
+  // the first turn of a session not restored yet restores it; the next turn of the same session does not
+  await $.turn.start({ text: 'after resume', turnId: 't1' } as never)
+  await $.turn.start({ text: 'again', turnId: 't2' } as never)
   await settle()
   expect(argv).toHaveLength(1)
   expect(argv[0]?.[0]).toBe('python3')
@@ -336,7 +336,7 @@ test('restores every stored row\'s time from the transcript on /resume', async (
   expect(await (await mountRow('UserMessage', 'p1', 'typed before')).find({ type: 'Text', text: fmt(T0) })).toBeDefined()
   expect(await (await mountRow('UserMessage', 'placeholder', '/clear')).find({ type: 'Text', text: fmt(T1) })).toBeDefined()
   expect(await (await mountRow('AssistantMessage', 'a1', 'done')).find({ type: 'Text', text: fmt(T1) })).toBeDefined()
-  expect(argv.at(-1)?.slice(2)).toEqual(['resumed', '/t/resumed.jsonl'])
+  expect(argv.at(-1)?.slice(2)).toEqual(['resumed'])
 })
 
 // prompt-toc's rescan keeps a live time over the transcript's too, so the same row shows one time in both mods
@@ -344,7 +344,7 @@ test('a restore leaves a row stamped live at its live time', async ($, on) => {
   mock.clock(on, { now: T0 })
   mock.session(on)
   on('session.id', () => ({ value: 's' }) as never)
-  on('classic.SessionStart', () => ({}) as never)
+  on('turn.start', ($, e) => ({ turnId: (e as { turnId: string }).turnId }) as never)
   // the transcript's own time for the row is earlier: it is built before it is stored
   on('process.run', () => ({ value: { exitCode: 0, stdout: JSON.stringify([['u1', new Date(T0 - 2000).toISOString(), '']]), stderr: '' } }) as never)
   on('ui.render', ($, e) => {
@@ -357,8 +357,38 @@ test('a restore leaves a row stamped live at its live time', async ($, on) => {
     uuid: 'u1',
     message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'hi' }] },
   } as never)
-  await $.classic.SessionStart({ source: 'resume', transcript_path: '/t/s.jsonl' } as never)
+  await $.turn.start({ text: 'after resume', turnId: 't1' } as never)
   for (let i = 0; i < 50; i++) await Promise.resolve()
 
   expect(await (await mountRow($, 'UserMessage', 'u1')).find({ type: 'Text', text: fmt(T0) })).toBeDefined()
+})
+
+// an in-process /resume raises no session.start and its classic.SessionStart never reaches a user-tier mod
+// (cc-plugin-sec-default sends classic.* past the user tier): the first turn of a session not yet restored restores it
+test('the first turn of a session not yet restored stamps its transcript rows (in-process /resume)', async ($, on) => {
+  mock.clock(on, { now: T0 })
+  mock.session(on)
+  let sid = 'session-1'
+  on('session.id', () => ({ value: sid }) as never)
+  on('turn.start', ($, e) => ({ turnId: (e as { turnId: string }).turnId }) as never)
+  const scanned: string[] = []
+  on('process.run', ($, e) => {
+    const id = (e as { argv: string[] }).argv[2] ?? ''
+    scanned.push(id)
+    return { value: { exitCode: 0, stdout: JSON.stringify([[`r-${id}`, '2026-01-02T03:04:05.000Z', '']]), stderr: '' } } as never
+  })
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>{(e.props as { text: string }).text}</Text>
+  })
+
+  await $.turn.start({ text: 'hi', turnId: 't1' } as never)
+  await $.turn.start({ text: 'again', turnId: 't2' } as never)
+  expect(scanned).toEqual(['session-1'])
+  sid = 'session-2'
+  await $.turn.start({ text: 'after resume', turnId: 't3' } as never)
+  await $.turn.start({ text: 'brief', turnId: 't4', agentId: 'agent-1' } as never)
+  expect(scanned).toEqual(['session-1', 'session-2'])
+  const restored = await mountRow($, 'UserMessage', 'r-session-2')
+  expect(await restored.find({ type: 'Text', text: fmt(T0) })).toBeDefined()
 })

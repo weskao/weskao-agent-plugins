@@ -1,6 +1,6 @@
 {
   "name": "message-clock",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Grok-style right-aligned clock on each sent prompt and each reply message",
   "author": { "name": "weskao", "url": "https://github.com/weskao" },
   "license": "MIT",

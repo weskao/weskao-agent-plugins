@@ -2,6 +2,15 @@
 
 All notable changes to message-clock. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.2 — 2026-10-22
+
+### Fixed
+
+- **An in-process `/resume` now stamps the resumed rows.** The restore used to wait on the
+  `classic.SessionStart` hook, which Claude Code's built-in `cc-plugin-sec-default` sends past
+  every user-installed mod, so it never ran. The first turn of a session not yet restored now
+  reads the transcript's times instead; a subagent's turn never does.
+
 ## 0.2.1 — 2026-10-20
 
 ### Changed

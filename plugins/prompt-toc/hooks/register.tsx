@@ -60,6 +60,8 @@ const ended = new Set<string>()
 let flush: { cancel(): void } | undefined
 // the session id the index was last rebuilt from (module memory); undefined after a session end, so the next follow tick rebuilds
 let indexedFor: string | undefined
+// the context fill session.measure last reported; a fall by more than half reads as a compaction
+let lastFill: number | undefined
 // the pane's user settings (hydrated from $.store in session.start) and whether its section is unfolded
 const settings = atom({ plugin: 'prompt-toc', key: 'settings' } as const, DEFAULTS)
 const settingsOpen = atom({ plugin: 'prompt-toc', key: 'settingsOpen' } as const, false)
@@ -487,7 +489,7 @@ export const register: Register = (on, options) => {
     answered.clear()
     pending.clear()
     indexedFor = undefined
-    // the pane stays open across session ends: /clear starts the index empty, /resume refills it (classic.SessionStart below)
+    // the pane stays open across session ends: /clear starts the index empty, /resume refills it (the first drawn row of the new session rescans)
     if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, entries, () => [])
       await update($, selected, () => '')
@@ -498,29 +500,27 @@ export const register: Register = (on, options) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // an in-process /resume raises no session.start, only the settings hooks' SessionStart; unawaited as at startup.
-  // A live /compact appends no boundary row (session.append never sees it), so the divider comes from a rescan of the
-  // transcript after it: classic.PostCompact and SessionStart 'compact' fire once it is done (the primary signals;
-  // best-effort, they do not run in a plugin an organization manages: there the divider appears only after a rescan, i.e.
-  // a reload or /prompt-toc). No session.compact fallback: it fires as the compaction starts, when a rescan can index the
-  // not-yet-replaced rows or the summary row as prompts.
-  // shortcut: two signals can fire for one compact and rescan twice (replaces the index, harmless); coalesce if that costs
-  on('classic.SessionStart', async ($, e, next) => {
+  // an in-process /resume or fork raises no session.start, and classic.SessionStart never reaches a user-tier mod (the
+  // built-in cc-plugin-sec-default sends classic.* past the user tier): the first row of the new session drawn on screen
+  // rescans instead (the UserMessage render hook, by indexedFor).
+  // A live /compact appends no boundary row this mod sees (session.append's compaction rows, session.compact and
+  // classic.PostCompact are all held past the user tier), so the divider comes from a rescan of the transcript once the
+  // context fill reported by session.measure falls by more than half: a compaction's signature, after it is done.
+  // shortcut: a fill that halves without a compaction (a far larger window after a model switch) rescans once, harmless
+  on('session.measure', async ($, e, next) => {
     const result = await next(e)
-    if (e.source === 'compact') {
-      shown.clear()
-      ended.clear()
-    }
-    if (e.source === 'resume' || e.source === 'fork' || e.source === 'compact') void rescan($, e.transcript_path)
-    return result
-  })
-
-  on('classic.PostCompact', async ($, e, next) => {
-    const result = await next(e)
-    // the rows before the compact left without an onScreen null: they must not pin the follow mark
-    shown.clear()
-    ended.clear()
-    void rescan($, e.transcript_path)
+    try {
+      const tokens = e.context.tokens
+      if (tokens !== undefined) {
+        if (lastFill !== undefined && tokens < lastFill / 2) {
+          // the rows before the compact left without an onScreen null: they must not pin the follow mark
+          shown.clear()
+          ended.clear()
+          void rescan($)
+        }
+        lastFill = tokens
+      }
+    } catch {}
     return result
   })
 

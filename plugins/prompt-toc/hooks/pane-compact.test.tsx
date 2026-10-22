@@ -119,33 +119,33 @@ test('a divider with nothing above it has no fold button', async ($, on) => {
   expect(await (await mountPane($)).find({ type: 'Button', text: /earlier/ })).toBeUndefined()
 })
 
-// live /compact has no session.append: the post-compact signals rescan the transcript
-for (const fire of [
-  ['classic.SessionStart source compact', ($: Engine) => $.classic.SessionStart({ source: 'compact' } as never)],
-  ['classic.PostCompact', ($: Engine) => $.classic.PostCompact({ trigger: 'manual', compact_summary: 's' } as never)],
-] as const) {
-  test(`${fire[0]} rescans, so the divider appears`, async ($, on) => {
-    mock.session(on)
-    on('session.id', () => ({ value: 's' }) as never)
-    let scans = 0
-    on('process.run', () => (scans++, { value: { exitCode: 0, stdout: JSON.stringify(ROWS), stderr: '' } }) as never)
-    on('classic.SessionStart', () => ({}) as never)
-    on('classic.PostCompact', () => ({}) as never)
-    await fire[1]($)
-    // the rescan is unawaited: let it settle
-    for (let i = 0; i < 50 && scans === 0; i++) await new Promise(r => setTimeout(r, 10))
-    expect(scans).toBe(1)
-    expect(await (await mountPane($)).find({ type: 'Text', text: '── compacted ──' })).toBeDefined()
-  })
-}
+// live /compact has no session.append this mod sees, and classic.PostCompact / session.compact are held past the user tier:
+// the context fill falling by more than half in session.measure is the post-compact signal that rescans the transcript
+const measure = ($: Engine, tokens: number) => $.session.measure({ context: { window: 200000, tokens }, rateLimits: [], changed: ['context'] } as never)
 
-test('classic.SessionStart with another source does not rescan', async ($, on) => {
+test('a context fill that falls by more than half rescans, so the divider appears', async ($, on) => {
   mock.session(on)
   on('session.id', () => ({ value: 's' }) as never)
+  on('session.measure', ($, e) => ({ changed: (e as { changed: string[] }).changed }) as never)
+  let scans = 0
+  on('process.run', () => (scans++, { value: { exitCode: 0, stdout: JSON.stringify(ROWS), stderr: '' } }) as never)
+  await measure($, 150000)
+  await measure($, 40000)
+  // the rescan is unawaited: let it settle
+  for (let i = 0; i < 50 && scans === 0; i++) await new Promise(r => setTimeout(r, 10))
+  expect(scans).toBe(1)
+  expect(await (await mountPane($)).find({ type: 'Text', text: '── compacted ──' })).toBeDefined()
+})
+
+test('a context fill that grows, or falls by less than half, does not rescan', async ($, on) => {
+  mock.session(on)
+  on('session.id', () => ({ value: 's' }) as never)
+  on('session.measure', ($, e) => ({ changed: (e as { changed: string[] }).changed }) as never)
   let scans = 0
   on('process.run', () => (scans++, { value: { exitCode: 1, stdout: '', stderr: '' } }) as never)
-  on('classic.SessionStart', () => ({}) as never)
-  await $.classic.SessionStart({ source: 'clear' } as never)
+  await measure($, 150000)
+  await measure($, 160000)
+  await measure($, 100000)
   await new Promise(r => setTimeout(r, 50))
   expect(scans).toBe(0)
 })

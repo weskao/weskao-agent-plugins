@@ -239,20 +239,37 @@ test('/clear resets the keyword filter', async ($, on) => {
   expect(await ui.find({ type: 'Button', text: /^filter:/ })).toBeUndefined()
 })
 
-test('classic.PostCompact clears the follow memory of rows that left without a null report', async ($, on) => {
+// classic.PostCompact never reaches a user-tier mod (cc-plugin-sec-default sends classic.* past the user tier) and
+// session.compact is held the same way: a compaction shows as the context fill falling in session.measure
+test('a context fill that falls by more than half (a compaction) clears the follow memory of rows that left without a null report', async ($, on) => {
   mock.session(on)
   engine(on)
   const clock = mock.clock(on)
   const writes = followWrites(on)
-  on('classic.PostCompact', () => ({}) as never)
-  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '' } }) as never)
+  on('session.measure', ($, e) => ({ changed: (e as { changed: string[] }).changed }) as never)
+  on('session.id', () => ({ value: 's' }) as never)
+  let scans = 0
+  on('process.run', () => {
+    scans++
+    return { value: { exitCode: 1, stdout: '', stderr: '' } } as never
+  })
+  const measure = (tokens: number) => $.session.measure({ context: { window: 200000, tokens }, rateLimits: [], changed: ['context'] } as never)
+  await measure(150000)
   await prompt($, 'm1', 'first')
   await prompt($, 'm2', 'second')
   await row($, 'UserMessage', 'm1', 'first', { first: 0, last: 2, of: 3 })
   await clock.advance(100)
   expect(writes).toEqual(['m1|0||first'])
+  // the first drawn row rescanned once (the session was not indexed yet): count from here
+  scans = 0
+  // a fill that grows, or falls a little, is no compaction: no rescan
+  await measure(160000)
+  await measure(120000)
+  expect(scans).toBe(0)
   // the compact drops m1's screen memory: m2 entering is now the only on-screen row, so the mark moves to it
-  await $.classic.PostCompact({ trigger: 'manual', compact_summary: 's' } as never)
+  await measure(40000)
+  await clock.advance(1)
+  expect(scans).toBe(1)
   await row($, 'UserMessage', 'm2', 'second', { first: 0, last: 2, of: 3 })
   await clock.advance(100)
   expect(writes).toEqual(['m1|0||first', 'm2|0||second'])
