@@ -2,6 +2,8 @@
 
 Shows when your prompt cache is about to expire or be re-written, and stops the two habits that re-write it most: a model switch on a warm cache and a subagent waiting on one long Bash call.
 
+![cache-sentinel demo: the ⏳ countdown after a turn, the ⚠ warning while /model is typed, then ❄ once the cache expires](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/cache-sentinel/demo.gif)
+
 ## Install
 
 ```bash
@@ -20,6 +22,12 @@ Nothing to configure. After each of your turns a band above the prompt shows, wh
 - `⚠ /model 會重寫 prompt cache` — typed `/model`, `/effort` or `/fast` would re-write it; `/compact` first, or hand the work to a subagent with its own model.
 
 Each line names the tokens and an estimated cost (`[?]` when the model's price is unknown). The ⏳ and ❄ lines also pop once as a toast.
+
+![After a turn: the ⏳ band above the prompt and its toast, counting down to the cache's expiry](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/cache-sentinel/warm.jpeg)
+
+![/model typed in the prompt: the ⚠ band names the tokens and cost a switch would re-write](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/cache-sentinel/model-switch.jpeg)
+
+![The cache has expired: the ❄ band and its toast](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/cache-sentinel/expired.jpeg)
 
 Two guards:
 
