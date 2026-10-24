@@ -22,7 +22,7 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 At each session start a toast says when a newer version is published (the version list is fetched at most every 10 minutes).
 
-![The update toast: prompt-toc 0.7.0 is available: run /prompt-toc-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/update-toast-prompt-toc.jpeg)
+![The update toast: prompt-toc 0.8.1 is available: run /prompt-toc-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/update-toast-prompt-toc.jpeg?v=2)
 
 ![prompt-toc demo: click a prompt in the side pane and the transcript scrolls to it](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/prompt-toc/demo.gif?v=5)
 
