@@ -6,7 +6,7 @@ import { buildTracker, fitText, parseOutline, textWidth } from './state-file'
 import type { Outline } from './state-file'
 import { listRules, pauseRule, removeRule, rowText, RULES_TOOL, runAction } from './rules-edit'
 import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
-import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
+import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
 
 const trackers = atom({ plugin: 'skill-step-progress', key: 'trackers' } as const, [])
 const expanded = atom({ plugin: 'skill-step-progress', key: 'expanded' } as const, null)
@@ -349,7 +349,7 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     // a name still without state by the next prompt is not a SOP of this turn
     pending.clear()
-    if (e.command) void entered($, e.command.name, { overTurn: e.turnId })
+    if (e.command) void entered($, e.command.name, { overTurn: e.turnId ?? runningTurn() })
     return next(e)
   }).catch(($, e, next) => next(e))
 

@@ -2,6 +2,13 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 — 2026-10-28
+
+### Fixed
+
+- A `/commit` typed while the previous turn's Stop hook was still running is no longer ended at once as "abandoned: stopped at Survey". The earlier turn's end used to reach the run after it had started.
+- A flow that spans turns (such as `/merge-into-main`) no longer stays in progress for good when Claude stops working on it. After two turns in a row in which none of its commands ran, it ends as "abandoned: idle at <step>". One quiet turn, such as answering a question about the conflicts, still keeps it open.
+
 ## 0.2.0 — 2026-10-27
 
 ### Added

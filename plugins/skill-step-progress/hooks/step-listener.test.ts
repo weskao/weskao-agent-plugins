@@ -77,6 +77,7 @@ function fakeHost(
   on('prompt.submit', async ($, e) => e as never)
   on('tool.call', async ($, e) => ({ result: 'ok', isError: fail((e as { command?: string }).command ?? '') }) as never)
   on('turn.complete', async () => ({ text: '' }) as never)
+  on('turn.start', async ($, e) => ({ turnId: e.turnId }) as never)
   on('session.end', async ($, e) => {
     sid = 'sess-2'
     return { sessionId: e.sessionId } as never
@@ -114,6 +115,24 @@ test('the earlier turn completing while the queued /commit is still starting doe
   await $.turn.complete({ ...(turn() as object), turnId: 'earlier' } as never)
   await queued
   await clock.settle()
+  await $.tool.call(bash('git add a.md && git commit -q -m "docs: a"'))
+  await $.turn.complete(turn())
+  await clock.settle()
+
+  expect(calls.filter(c => c.includes('archive'))).toEqual(['commit archive --status completed'])
+})
+
+// Seen live after a Stop-hook continuation: the queued /commit's prompt.submit carried no turnId (the engine had already
+// ended the turn) yet landed before this mod's turn.complete for it, which ended the run at Survey 48 ms in
+test('a queued /commit with no turnId is not ended by the turn still completing in this mod', async ($, on) => {
+  const { calls } = fakeHost(on)
+  const clock = mock.clock(on)
+
+  await $.turn.start({ text: '', turnId: 'earlier' } as never)
+  await $.prompt.submit(slash('commit'))
+  await clock.settle()
+  await $.turn.complete({ ...(turn() as object), turnId: 'earlier' } as never)
+  await $.turn.start({ text: '/commit', turnId: 't' } as never)
   await $.tool.call(bash('git add a.md && git commit -q -m "docs: a"'))
   await $.turn.complete(turn())
   await clock.settle()
@@ -575,6 +594,41 @@ test('merge-into-main: conflicts on start move to Resolve; the run waits across 
     'merge-into-main step 4 in_progress',
     'merge-into-main archive --status completed',
   ])
+})
+
+// Seen live: /merge-into-main invoked with nothing to merge, so none of its commands ran; it sat at Start merge for good
+test('a waiting flow none of whose commands ran for two turns ends as abandoned, with a toast', async ($, on) => {
+  const { calls, toasts } = fakeHost(on)
+  const clock = mock.clock(on)
+
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await clock.settle()
+  await $.turn.complete(turn())
+  await $.tool.call(bash('git status'))
+  await $.turn.complete(turn())
+  await clock.settle()
+
+  expect(calls.slice(1)).toEqual(['merge-into-main archive --status abandoned --note idle at Start merge'])
+  expect(toasts).toEqual(['/merge-into-main abandoned: idle at Start merge'])
+})
+
+test('one turn without the flow\'s commands (the user asking about the conflicts) keeps it open', async ($, on) => {
+  const { calls } = fakeHost(on, cmd => / start\b/.test(cmd))
+  const clock = mock.clock(on)
+
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await clock.settle()
+  await $.tool.call(bash(`python3 "${MERGE}" start feat/x`))
+  await $.turn.complete(turn())
+  await $.turn.complete(turn())
+  await $.tool.call(bash('npx vitest run'))
+  await $.turn.complete(turn())
+  await $.turn.complete(turn())
+  await $.tool.call(bash(`python3 "${MERGE}" finish --repo "$REPO"`))
+  await $.turn.complete(turn())
+  await clock.settle()
+
+  expect(calls.filter(c => c.includes('archive'))).toEqual(['merge-into-main archive --status completed'])
 })
 
 test('commands outside the rules are left alone', async ($, on) => {

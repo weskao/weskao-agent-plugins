@@ -211,6 +211,7 @@ export const TITLE = 'Progress'
 // `dir`: where the run's state goes (`<sessionBase>/<skill>/<repo>[~<agent>]`), resolved once at start; `at` once resolved
 // `overTurn`: the turn a typed /name was queued over (prompt.submit's turnId), whose completion is not this run's
 // `agentId`: the sub-agent whose run it is (its own box, its own Bash calls, its own turn end); absent for the main loop
+// `worked`: one of its commands ran since the last turn end; `idle`: turns in a row that ended without one
 type Run = {
   key: string
   skill: string
@@ -223,13 +224,23 @@ type Run = {
   listed: string
   overTurn: string | undefined
   agentId: string | undefined
+  worked: boolean
+  idle: number
 }
+// A flow waiting across turns may sit out one turn (the user answering its question); a second without any of its
+// commands means it stopped (a /merge-into-main with nothing to merge), so it is not shown in progress for good
+const IDLE_TURNS = 2
 // one run per flow and loop: /commit typed while /release waits for its intro keeps both, each in its own pane box, and a
 // sub-agent's /commit is another box beside the main one
 // shortcut: lives in this process only (lost on /reload-plugins mid-run, then archived as abandoned by the pane's scan);
 // move to $.state if that bites
 const runs = new Map<string, Run>()
 const runKey = (skill: string, agentId?: string) => (agentId ? `${skill}@${agentId}` : skill)
+// The main loop's turn as this mod last saw it: set at turn.start, cleared once this mod's turn.complete for it is done.
+// A /name queued over a Stop-hook continuation is submitted with no turnId (the engine already ended that turn) yet can
+// land before that turn.complete reaches here, so prompt.submit falls back to this.
+let running: string | undefined
+export const runningTurn = () => running
 // writes run in order: a step must not land before the init that creates its state
 let queue: Promise<unknown> = Promise.resolve()
 
@@ -313,15 +324,18 @@ async function lookupRepo($: EngineInterface) {
 // loadRules first
 export async function startRun($: EngineInterface, skill: string, from: { overTurn?: string; agentId?: string } = {}) {
   const key = runKey(skill, from.agentId)
-  // the same run seen again (several entry hooks fire for one invocation, or a /release resumed next turn)
-  if (!isListened(skill) || runs.has(key)) return
+  // the same run seen again (several entry hooks fire for one invocation, or a /release resumed next turn); a skill.prompt
+  // that won the race keeps the turn the typed /name's prompt.submit names
+  const seen = runs.get(key)
+  if (seen) seen.overTurn ??= from.overTurn
+  if (!isListened(skill) || seen) return
   const rule = rules[skill]!
   // a sub-agent's run gets its own folder, so its own box, labeled with the start of its id
   const agent = from.agentId === undefined ? '' : from.agentId.replace(/[^\w-]/g, '').slice(0, 8) || 'agent'
   const dir = (async () => `${await sessionBase($)}/${skill}/${await repoKey($)}${agent && `~${agent}`}`)()
   // a promise, so a command racing this start still diffs against the HEAD before it
   const trees = new Map(rule.commits === 'made' ? [['', head($)]] : [])
-  const run: Run = { key, skill, rule, dir, step: 1, failedAt: null, trees, listed: '', overTurn: from.overTurn, agentId: from.agentId }
+  const run: Run = { key, skill, rule, dir, step: 1, failedAt: null, trees, listed: '', overTurn: from.overTurn, agentId: from.agentId, worked: false, idle: 0 }
   // registered, with its turn, before any await: a second entry hook for the same invocation finds it, and the turn it
   // was typed over may complete at any time
   runs.set(key, run)
@@ -347,6 +361,7 @@ export function abandon($: EngineInterface, dir: string) {
 export function reset() {
   runs.clear()
   repo = null
+  running = undefined
 }
 
 async function git($: EngineInterface, args: string[], cwd?: string): Promise<string | null> {
@@ -421,6 +436,7 @@ export async function trackBash<R extends { isError?: boolean }>($: EngineInterf
     .map(cur => ({ cur, kind: cur.rule.commits, hits: cur.rule.marks.filter(m => m.cmd.test(command)) }))
     .filter(s => s.hits.length > 0)
   if (seen.length === 0) return run()
+  for (const { cur } of seen) cur.worked = true
   const tree = await workTree($, command)
   // a work tree's HEAD is read before the run's first step there, so its commits list from that point
   for (const { cur, kind } of seen) if (tree && kind === 'made' && !cur.trees.has(tree)) cur.trees.set(tree, head($, tree))
@@ -441,31 +457,45 @@ export async function trackBash<R extends { isError?: boolean }>($: EngineInterf
   return ran
 }
 
-// progress-pane.tsx's register calls this: the only event here the pane does not hook itself
+// progress-pane.tsx's register calls this: the only events here the pane does not hook itself
 export function listen(on: On) {
+  // a subagent's run raises no turn.start, so this is the main loop's
+  on('turn.start', async ($, e, next) => {
+    running = e.turnId
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('turn.complete', async ($, e, next) => {
+    // taken before next(e): a run registered while later hooks finish this turn started after it
+    const live = [...runs.values()]
     const ran = await next(e)
     const cut = e.reason !== 'answer'
-    for (const run of [...runs.values()]) {
+    for (const run of live) {
       // the main loop's turns end its runs, a sub-agent's turn its own
       if (run.agentId !== e.agentId) continue
       // a /name typed while the turn before ran its Stop hooks is queued and starts its run before that turn completes
       if (run.overTurn === e.turnId) continue
       const rule = run.rule
       // a sub-agent's turn is its whole run: nothing of it waits for a later turn
-      if (!(cut || rule.oneTurn || run.agentId !== undefined || run.step >= rule.doneAt)) continue
+      if (!(cut || rule.oneTurn || run.agentId !== undefined || run.step >= rule.doneAt)) {
+        run.idle = run.worked ? 0 : run.idle + 1
+        run.worked = false
+        if (run.idle < IDLE_TURNS) continue
+      }
       if (rule.commits === 'made') await listCommits($, run, await madeCommits($, run))
       const at = rule.steps[run.step - 1] ?? ''
       const failed = run.failedAt != null
       const status = failed || cut ? 'failed' : run.step >= rule.doneAt ? 'completed' : 'abandoned'
+      const stopped = run.idle >= IDLE_TURNS ? `idle at ${at}` : `stopped at ${at}`
       const note =
-        status === 'completed' ? undefined : cut ? `turn ${e.reason} at ${at}` : failed ? `failed at ${rule.steps[run.failedAt! - 1] ?? at}` : `stopped at ${at}`
+        status === 'completed' ? undefined : cut ? `turn ${e.reason} at ${at}` : failed ? `failed at ${rule.steps[run.failedAt! - 1] ?? at}` : stopped
       await write(async () => archive($, await run.dir, status, note))
       // noticed with the pane closed too
       if (note) $.ui.toast(`/${run.skill}${run.agentId === undefined ? '' : ' (sub-agent)'} ${status}: ${note}`)
       // kept until archived: the pane's scan takes an in-progress run nobody follows for a leftover
       runs.delete(run.key)
     }
+    if (e.agentId === undefined && running === e.turnId) running = undefined
     return ran
   }).catch(($, e, next) => next(e))
 }

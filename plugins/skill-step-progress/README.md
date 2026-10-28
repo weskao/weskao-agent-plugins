@@ -66,7 +66,7 @@ All three keep your flows in `~/.claude/skill-step-progress/rules.json` (on Wind
 | `marks[].after` | Optional: match only once the run reached this step. |
 | `marks[].onError` | Optional: match only after the command ran and failed. |
 | `doneAt` | A turn that ends at or past this step finishes the run as completed. |
-| `oneTurn` | Optional: the flow never spans turns, so a turn ending before `doneAt` ends it as abandoned. |
+| `oneTurn` | Optional: the flow never spans turns, so a turn ending before `doneAt` ends it as abandoned. Without it the flow may wait for you across turns, but two turns in a row in which none of its commands ran end it as abandoned ("idle at <step>"). |
 | `off` | Optional: `true` pauses the flow; it stays in the file but is not tracked. |
 | `commits` | Optional: `"made"` lists the commits since the run started; `"pushed"` lists what a matched push sent. |
 
