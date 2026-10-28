@@ -289,6 +289,52 @@ test('/progress open|close opens and closes the pane; bare opens; anything else 
   expect(paneCalls).toEqual(['close', 'open', 'open'])
 })
 
+test('session.start registers the shortcut commands next to /progress', async ($, on) => {
+  const commands: { name?: string }[] = []
+  fakeHost(on, {}, [], commands)
+  await $.session.start({ sessionId: 'sess-1' } as never)
+  expect(commands.map(c => c.name)).toEqual(expect.arrayContaining(['progress', 'progress-open', 'progress-close', 'progress-history', 'progress-rules', 'progress-forget', 'progress-time', 'progress-update']))
+})
+
+test('/progress-close turns tracking and the pane off for good; /progress-open turns them on', async ($, on) => {
+  const paneCalls: string[] = []
+  const store: Record<string, unknown> = {}
+  fakeHost(on, store, paneCalls)
+  const clock = mock.clock(on)
+
+  expect((await $.command.run({ command: 'progress-close', args: '' } as never)).text).toMatch(/Progress is off/)
+  expect(store.isOff).toBe(true)
+  expect(paneCalls).toEqual(['close'])
+  // off: /progress does not open, the model's pane tool does not open, and a typed skill is not recorded
+  expect((await $.command.run({ command: 'progress', args: '' } as never)).text).toMatch(/Progress is off/)
+  expect((await $.tool.call({ tool: 'mcp__skill-step-progress__pane', action: 'open' } as never)).result).toMatch(/Progress is off/)
+  await $.prompt.submit({ text: '/sop-a', command: { name: 'sop-a', args: '' } } as never)
+  await clock.settle()
+  expect(paneCalls).toEqual(['close'])
+  expect((await $.command.run({ command: 'progress-time', args: '' } as never)).text).toBe('No runs in this session yet.')
+
+  expect((await $.command.run({ command: 'progress-open', args: '' } as never)).text).toBe('Progress is on, pane opened.')
+  expect(store.isOff).toBe(false)
+  expect(paneCalls).toEqual(['close', 'open'])
+})
+
+test('the shortcut commands stand for their /progress subcommands', async ($, on) => {
+  fakeHost(on, {})
+  const run = async (command: string, args = '') => (await $.command.run({ command, args } as never)).text
+  expect(await run('progress-history')).toBe(await run('progress', 'history'))
+  expect(await run('progress-forget', 'sop-b')).toBe('Forgot sop-b for this session.')
+  expect(await run('progress-rules', 'show')).toBe(await run('progress', 'rules show'))
+})
+
+test('/progress-time lists each run with its total time and main steps', async ($, on) => {
+  fakeHost(on, {})
+  const clock = mock.clock(on)
+  await $.skill.prompt({ skill: 'sop-d', text: 'go' })
+  await clock.settle()
+  const text = (await $.command.run({ command: 'progress-time', args: '' } as never)).text as string
+  expect(text).toMatch(/^\/sop-d 3\.0\.0 · total /)
+})
+
 // After /clear, /resume or /logout the process may go on under another session id with no `session.start`,
 // so the old run's pane would linger; on exit or a signal the process ends and takes the pane with it.
 test('/clear, /resume and /logout close the pane; process-ending reasons leave it alone', async ($, on) => {

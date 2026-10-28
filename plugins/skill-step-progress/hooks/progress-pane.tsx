@@ -17,6 +17,24 @@ const view = atom({ plugin: 'skill-step-progress', key: 'view' } as const, 'runs
 const ruleRows = atom({ plugin: 'skill-step-progress', key: 'ruleRows' } as const, [])
 const confirming = atom({ plugin: 'skill-step-progress', key: 'confirming' } as const, '')
 
+// /progress-open and /progress-close: tracking and the pane off for good (kept across sessions in $.store), like prompt-toc's
+const OFF = { plugin: 'skill-step-progress', key: 'isOff' } as const
+const OFF_NOTE = 'Progress is off (/progress-open to turn it on).'
+async function isOff($: EngineInterface) {
+  return (await $.state.get(OFF)).value === true
+}
+
+// name, description, argument hint
+const COMMANDS = [
+  ['progress-open', 'Turn Progress on and open its pane', ''],
+  ['progress-close', 'Turn Progress off: stop tracking flows and close the pane', ''],
+  ['progress-history', "List this session's finished runs with status and time", ''],
+  ['progress-rules', 'Manage the flows Progress tracks', '[show|pause <name>|resume <name>|remove <name>]'],
+  ['progress-forget', "Drop a skill from this session's Progress list", '<skill>'],
+  ['progress-time', "Show each run's total time and its steps' times as text", ''],
+  ['progress-update', 'Update skill-step-progress (same as /skill-step-progress-update)', ''],
+] as const
+
 const ARGS = '[open|close|history|forget <skill>|rules [show|pause|resume|remove <name>]]'
 const USAGE = `Usage: /progress ${ARGS}`
 // shown after `/progress ` as you type, like a command .md's argument-hint
@@ -180,6 +198,7 @@ async function scan($: EngineInterface, skills: string[]): Promise<Tracker[]> {
 
 // `skills` is passed by a caller that just wrote `invoked`: reads within one dispatch still see the old value.
 async function refresh($: EngineInterface, skills?: string[]) {
+  if (await isOff($)) return
   skills ??= await read($, invoked)
   const prev = await read($, trackers)
   // Emptied by `/progress forget`: clear here too, so a poll that scanned the old list cannot leave a tracker behind.
@@ -236,6 +255,7 @@ function trackerSkill(name: string): string | undefined {
 // `trackers` reads as it was before this dispatch: a run appearing for the first time is opened by `refresh` instead.
 // `from`: the turn a typed /name was submitted over, or the sub-agent whose Skill call it is
 async function entered($: EngineInterface, name: string, from: { overTurn?: string; agentId?: string } = {}) {
+  if (await isOff($)) return
   // before mapping the name (state flows) and the scan below, which reads a listener flow from the temp folder
   await loadRules($)
   const skill = trackerSkill(name)
@@ -275,6 +295,19 @@ function shortStamp(iso: string) {
   if (Number.isNaN(d.getTime())) return iso.slice(5, 16).replace('T', ' ')
   const p = (n: number) => String(n).padStart(2, '0')
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// /progress-time: each run's total time, then its main steps' times, as text (no pane needed)
+async function timeText($: EngineInterface) {
+  await refresh($)
+  const list = await read($, trackers)
+  if (list.length === 0) return 'No runs in this session yet.'
+  return list
+    .map(t => {
+      const head = `/${t.skill}${t.label ? ` ${t.label}` : ''} · total ${t.totalMs == null ? '—' : duration(t.totalMs)}${t.archived ? '' : ' (running)'}`
+      return [head, ...t.steps.filter(s => s.isMain && s.ms != null).map(s => `  ${s.id}  ${s.title}  ${duration(s.ms ?? 0)}`)].join('\n')
+    })
+    .join('\n\n')
 }
 
 // /progress history: this session's finished runs (the listener's, kept in its temp folder), oldest first
@@ -367,7 +400,14 @@ export const register: Register = on => {
       description: "Open or close this session's step progress pane: /commit, the flows in your rules file, and skills that save their own progress state",
       argumentHint: HINT,
     })
+    // the shortcuts for /progress's subcommands, the on/off switch and /progress-time; a refused one must not stop the rest
+    try {
+      for (const [name, description, argumentHint] of COMMANDS) await $.command.register({ name, description, ...(argumentHint && { argumentHint }) })
+    } catch {}
     await registerUpdate($)
+    try {
+      if ((await $.store.get('isOff')) === true) await $.state.set(OFF, true)
+    } catch {}
     try {
       await $.tool.register(RULES_TOOL as never)
       await $.tool.register({
@@ -408,10 +448,34 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   // Bare `/progress` keeps opening, as before the subcommands existed.
-  on('command.run', { command: 'progress' }, async ($, e) => {
-    const arg = e.args.trim().toLowerCase()
+  on('command.run', { command: 'progress-close' }, async $ => {
+    await $.state.set(OFF, true)
+    await $.store.set('isOff', true)
+    // a run in flight is dropped, not left to end with a toast the person turned off
+    reset()
+    await update($, trackers, () => [])
+    await $.ui.close({ id: PANE })
+    return { text: OFF_NOTE }
+  })
+
+  on('command.run', { command: 'progress-open' }, async $ => {
+    await $.state.set(OFF, false)
+    await $.store.set('isOff', false)
+    await refresh($)
+    await $.ui.open({ id: PANE, title: TITLE })
+    return { text: 'Progress is on, pane opened.' }
+  })
+
+  on('command.run', { command: 'progress-time' }, async $ => ({ text: await timeText($) }))
+
+  on('command.run', { command: 'progress-update' }, async $ => ({ text: await runUpdate($) }))
+
+  // the shortcuts hand their own words to the subcommand they stand for
+  on('command.run', { command: ['progress', 'progress-history', 'progress-rules', 'progress-forget'] }, async ($, e) => {
+    const args = e.command === 'progress' ? e.args : `${e.command.slice('progress-'.length)} ${e.args}`
+    const arg = args.trim().toLowerCase()
     // names keep their case
-    const rules = e.args.trim().match(/^rules(?:\s+(.*))?$/i)
+    const rules = args.trim().match(/^rules(?:\s+(.*))?$/i)
     if (rules) return { text: await rulesCommand($, rules[1] ?? '') }
     if (arg === 'history') return { text: await historyText($) }
     if (arg === 'close') {
@@ -428,6 +492,7 @@ export const register: Register = on => {
       return { text: `Forgot ${forget} for this session.` }
     }
     if (arg !== '' && arg !== 'open') return { text: USAGE }
+    if (await isOff($)) return { text: OFF_NOTE }
     await refresh($)
     await $.ui.open({ id: PANE, title: TITLE })
     return { text: 'Progress pane opened.' }
@@ -438,6 +503,7 @@ export const register: Register = on => {
   // natural-language open/close: the model calls mcp__skill-step-progress__pane (registered in session.start)
   on('tool.call', { tool: `mcp__${PANE}__pane` }, async ($, e) => {
     const isClose = (e as { action?: string }).action === 'close'
+    if (!isClose && (await isOff($))) return { result: OFF_NOTE }
     if (isClose) await $.ui.close({ id: PANE })
     else await $.ui.open({ id: PANE, title: TITLE })
     return { result: `Progress pane ${isClose ? 'closed' : 'opened'}.` }
@@ -455,6 +521,7 @@ export const register: Register = on => {
   // inspect it) is not running it. Other usage-data dirs (run folders of a state script) never match. A call matching a
   // state flow's `writer` marks that flow's folder the same way.
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (await isOff($)) return next(e)
     // a sub-agent's git/test commands are steps of its own runs only
     const ran = await trackBash($, e.command, e.agentId, () => next(e))
     // a state flow's writer (from the rules file) marks it as run with no WRITES check: the writer is its own state script
@@ -474,6 +541,7 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
+    if (await isOff($)) return <Text dimColor>{OFF_NOTE}</Text>
     const list = await read($, trackers)
     const picked = await read($, expanded)
     const open = list.some(t => t.key === picked) ? picked : list[0]?.key

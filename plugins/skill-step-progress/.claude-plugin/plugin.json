@@ -1,6 +1,6 @@
 {
   "name": "skill-step-progress",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Live pane showing the current step and overall progress of this session's flows, one box per run: /commit (and any flow you add in ~/.claude/skill-step-progress/rules.json) by watching the commands it runs, and skills that write their own state to ~/.claude/usage-data/<skill>/<repo>/current.json",
   "author": {
     "name": "weskao",

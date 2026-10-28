@@ -2,6 +2,12 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.1 — 2026-10-28
+
+### Added
+
+- `/safe-git-push` is tracked with the same steps as `/push` (Safe push → Summary).
+
 ## 0.3.0 — 2026-10-28
 
 ### Added

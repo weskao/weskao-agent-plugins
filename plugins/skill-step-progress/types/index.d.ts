@@ -92,6 +92,8 @@ declare module 'claude-code' {
       ruleRows: RuleRow[]
       /** the flow whose Remove awaits a confirm, '' for none */
       confirming: string
+      /** /progress-close: tracking and the pane are off; mirrored in `$.store` so it survives new sessions */
+      isOff: boolean
     }
   }
 }
