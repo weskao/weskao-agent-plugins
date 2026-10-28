@@ -33,6 +33,8 @@ It shows two kinds of runs:
 - **Watched flows**: `/commit` is built in. The mod follows the commands it runs (`git add` / `git commit` → Commit batches, `git log` → Verify) and lists the commits it made, so the skill itself carries no progress calls. Commits made in another work tree count too, when the step names it (`git -C <dir>`, or `cd <dir> && …` in the same command). A sub-agent's run, such as a `/commit` a sub-agent makes, gets its own box labeled `sub-agent <id>` and ends with that sub-agent. A watched run is followed by the process that started it: one left behind by a crash, `--resume` or `/reload-plugins` mid-run is archived as abandoned ("left by an earlier process") rather than shown in progress for the rest of the session.
 - **Skills that write their own state** to `~/.claude/usage-data/<skill>/<repo>/current.json` (under `CLAUDE_CONFIG_DIR` when set; archived under `history/`). The shape is `StateFileContract` in [`types/index.d.ts`](types/index.d.ts). A skill whose folder has its own name needs no setup. A command whose folder is named differently (`/orch:task` writing `orch-task`) gets a state flow in your rules file (see below).
 
+![The Progress pane with two runs at once: /deploy expanded and /migrate-db collapsed, one box per run](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/progress-multi-runs.jpeg)
+
 A `/commit` run from start to finish, then its box once it is done:
 
 ![The Progress pane following a /commit run step by step](screenshots/progress-commit-demo.gif?v=3)
@@ -44,6 +46,8 @@ https://github.com/user-attachments/assets/6a8df983-44b6-4204-a9e2-a4ad8426135e
 ## Update
 
 When a newer version is published, a toast says so at session start (checked at most once every 10 minutes). Run `/skill-step-progress-update` to update, then restart Claude Code.
+
+![The update toast: skill-step-progress 0.4.0 is available: run /skill-step-progress-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/update-toast-skill-step-progress.jpeg)
 
 ## Add your own flows
 
