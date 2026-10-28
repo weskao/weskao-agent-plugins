@@ -2,6 +2,12 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.0 — 2026-10-28
+
+### Changed
+
+- **Clicking a run's header now opens or closes that run's box.** Several runs can be open at once, and opening one no longer closes the others. Until you click a header, only the first run is open, as before.
+
 ## 0.4.0 — 2026-10-28
 
 ### Changed

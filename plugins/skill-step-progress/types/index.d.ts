@@ -107,7 +107,8 @@ declare module 'claude-code' {
   interface PluginState {
     'skill-step-progress': {
       trackers: Tracker[]
-      expanded: string | null
+      /** run key → open, set by clicking its header; a run not in it is open only when it is the first */
+      expanded: Record<string, boolean>
       /** skills/commands run in this session, most recent last; only their runs are shown */
       invoked: string[]
       /** the pane shows the runs or the Rules view; `ruleRows` is read from the rules file on entering it and after each edit */

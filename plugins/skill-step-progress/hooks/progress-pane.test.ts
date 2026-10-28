@@ -628,6 +628,31 @@ test('/commit and /push show only this session\'s runs from the temp folder, not
   expect(await ui.find({ text: /▸ push/ })).toBeUndefined()
 })
 
+test('a run header toggles its own box open or closed, and several can be open at once', async ($, on) => {
+  const run = JSON.stringify({ status: 'in_progress', current_step: '1', total_steps: 1, steps: { '1': { status: 'in_progress', title: 'Go' } } })
+  STATE[`${BASE}/sop-a/repo/current.json`] = run
+  STATE[`${BASE}/sop-b/repo/current.json`] = run
+  fakeHost(on, {})
+  const clock = mock.clock(on)
+
+  const ui = await $.ui.mount({ ...pane, props })
+  await $.skill.prompt({ skill: 'sop-a', text: 'go' })
+  await $.skill.prompt({ skill: 'sop-b', text: 'go' })
+  await clock.settle()
+  const isOpen = async (skill: string) => (await ui.find({ text: new RegExp(`^▾ ${skill}`) })) !== undefined
+  const states = async () => [await isOpen('sop-a'), await isOpen('sop-b')]
+  const first = await states()
+  expect(first.filter(Boolean)).toHaveLength(1)
+  // each press flips only its own box
+  await ui.press({ key: 'h:sop-a/repo' })
+  expect(await states()).toEqual([!first[0], first[1]])
+  await ui.press({ key: 'h:sop-b/repo' })
+  expect(await states()).toEqual([!first[0], !first[1]])
+  // the box that started open is closed now; reopening it leaves both open
+  await ui.press({ key: first[0] ? 'h:sop-a/repo' : 'h:sop-b/repo' })
+  expect(await states()).toEqual([true, true])
+})
+
 // A crash, `--resume` or /reload-plugins mid-run leaves a listener run in progress that no process follows: the pane
 // archives it as abandoned at its next scan instead of showing it live for the rest of the session.
 test('a listener run left in progress by an earlier process is archived as abandoned, not shown live', async ($, on) => {

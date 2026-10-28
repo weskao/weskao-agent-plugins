@@ -9,7 +9,8 @@ import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
 import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, restore, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
 
 const trackers = atom({ plugin: 'skill-step-progress', key: 'trackers' } as const, [])
-const expanded = atom({ plugin: 'skill-step-progress', key: 'expanded' } as const, null)
+// each run's open/closed state as toggled by its header; a run never toggled is open only when it is the first
+const expanded = atom({ plugin: 'skill-step-progress', key: 'expanded' } as const, {})
 const invoked = atom({ plugin: 'skill-step-progress', key: 'invoked' } as const, [])
 // this computer's flows (built-in + its own rules file), re-read each poll and after each edit: the Rules view's rows and
 // the empty pane's list; and a remove awaiting confirm
@@ -549,8 +550,7 @@ export const register: Register = on => {
     const { Box, Text, Button } = $.ui.resolve(e)
     if (await isOff($)) return <Text dimColor>{OFF_NOTE}</Text>
     const list = await read($, trackers)
-    const picked = await read($, expanded)
-    const open = list.some(t => t.key === picked) ? picked : list[0]?.key
+    const toggled = await read($, expanded)
     const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 60
     const barWidth = Math.max(8, Math.min(32, cols - 18))
     const shown = await read($, view)
@@ -716,7 +716,7 @@ export const register: Register = on => {
     return withHeader(
       <Box flexDirection="column" gap={1}>
         {list.map(t => {
-          const isOpen = t.key === open
+          const isOpen = toggled[t.key] ?? t.key === list[0]?.key
           // Clamped like `filled` below: a negative or overshot total must not print -100% or 300%.
           const pct = t.total ? Math.min(100, Math.max(0, Math.round((t.done / t.total) * 100))) : null
           // Clamped: a done count above its total must not hand `repeat` a negative count and blank the whole pane.
@@ -732,7 +732,7 @@ export const register: Register = on => {
               borderColor={isOpen ? 'claude' : 'subtle'}
               paddingX={1}
             >
-              <Button key={`h:${t.key}`} plain onPress={() => update($, expanded, () => t.key)}>
+              <Button key={`h:${t.key}`} plain onPress={() => update($, expanded, m => ({ ...m, [t.key]: !isOpen }))}>
                 <Text color="claude" bold>{`${isOpen ? '▾' : '▸'} ${t.skill}`}</Text>
                 <Text dimColor>{t.label ? `  ${t.label}` : ''}</Text>
                 {t.archived && <Text color={lastRun.color}>{lastRun.text}</Text>}
