@@ -2,7 +2,7 @@
 
 A live pane beside the chat that shows the current step and overall progress of this session's flows, one box per run, with the run's total time, each step's time and the commits a run made.
 
-![The Progress pane during a /commit run](screenshots/progress-commit-running.jpeg?v=2)
+![The Progress pane during a /commit run](screenshots/progress-commit-running.jpeg?v=3)
 
 ## Install
 
@@ -26,7 +26,7 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `git` on `PATH`. W
 | `/progress-time` | Each run's total time and its steps' times, as text |
 | `/progress-update` | Same as `/skill-step-progress-update` |
 
-![/progress history listing a finished /commit run](screenshots/progress-history.jpeg)
+![/progress history listing a finished /commit run](screenshots/progress-history.jpeg?v=2)
 
 It shows two kinds of runs:
 
@@ -35,9 +35,11 @@ It shows two kinds of runs:
 
 A `/commit` run from start to finish, then its box once it is done:
 
-![The Progress pane following a /commit run step by step](screenshots/progress-commit-demo.gif?v=2)
+![The Progress pane following a /commit run step by step](screenshots/progress-commit-demo.gif?v=3)
 
-![A finished /commit run with its commits and each step's time](screenshots/progress-commit-finished.jpeg?v=2)
+https://github.com/user-attachments/assets/6a8df983-44b6-4204-a9e2-a4ad8426135e
+
+![A finished /commit run with its commits and each step's time](screenshots/progress-commit-finished.jpeg?v=3)
 
 ## Update
 
