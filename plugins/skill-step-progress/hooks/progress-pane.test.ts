@@ -625,6 +625,47 @@ test('a listener run left in progress by an earlier process is archived as aband
   expect(await ui.find({ text: /▶ Step 1/ })).toBeUndefined()
 })
 
+// /reload-plugins mid-run starts the module over, but `$.state` keeps what the old module saved: the reloaded mod
+// follows that run on to its end instead of archiving it as abandoned. The test answers `$.state.get` with the saved run.
+const RELEASE = ['Survey', 'Test gate', 'Draft intro', 'Release script', 'Publish & verify', 'Summary']
+function reloadedRelease(on: On, steps: string[]) {
+  const dir = `${OWN}/release/repo`
+  LIST[`${OWN}/release`] = [{ name: 'repo', kind: 'dir' }]
+  fakeHost(on, {})
+  on('turn.complete', async () => ({ text: '' }) as never)
+  WRITTEN[`${OWN}/invoked.json`] = JSON.stringify(['release'])
+  WRITTEN[`${dir}/current.json`] = JSON.stringify({
+    status: 'in_progress', current_step: '2', total_steps: 6, step_order: ['1', '2', '3', '4', '5', '6'],
+    steps: Object.fromEntries(RELEASE.map((title, i) => [String(i + 1), { status: i === 0 ? 'done' : i === 1 ? 'in_progress' : 'pending', title }])),
+  })
+  const saved = [{ key: 'release', skill: 'release', at: dir, steps, step: 2, failedAt: null, trees: [], listed: '', worked: true, idle: 0 }]
+  on('state.get', { plugin: 'skill-step-progress', key: 'runs' }, async () => ({ value: { value: saved, version: 1 } }) as never)
+  return dir
+}
+const archivedIn = (dir: string) => Object.keys(WRITTEN).filter(p => p.startsWith(`${dir}/history/`)).map(p => JSON.parse(WRITTEN[p]!) as { status: string; note?: string })
+
+test('a listener run in progress across /reload-plugins is followed to its end by the reloaded mod', async ($, on) => {
+  const dir = reloadedRelease(on, RELEASE)
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  await clock.settle()
+  expect(JSON.parse(WRITTEN[`${dir}/current.json`]!).status).toBe('in_progress')
+
+  await $.tool.call({ tool: 'Bash', command: 'bash release.sh' } as never)
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' } as never)
+  await clock.settle()
+  expect(archivedIn(dir).map(a => a.status)).toEqual(['completed'])
+})
+
+// A rule edited between the save and the reload no longer fits the run's state file: that run ends as before.
+test('a run saved before /reload-plugins whose flow changed its steps meanwhile is archived as abandoned', async ($, on) => {
+  const dir = reloadedRelease(on, ['Survey', 'Release script'])
+  const clock = mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  await clock.settle()
+  expect(archivedIn(dir).map(a => a.status)).toEqual(['abandoned'])
+})
+
 // The poll's scan takes an in-progress run nobody follows for a leftover: a run being archived at turn end (its commits
 // listed first, a git call) must still count as followed, or the poll archives it as abandoned first.
 test('a poll landing while turn end lists a run\'s commits does not archive it as abandoned', async ($, on) => {

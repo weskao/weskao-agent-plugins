@@ -2,6 +2,14 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.3 — 2026-10-28
+
+### Fixed
+
+- A run's total time is now its main steps' times added up, and those times add up exactly: whole seconds and whole percents are shared out by largest remainder, so rounding no longer leaves the steps a second short of the total or the shares at 99% or 101%. Sub-steps stay inside their main step and are not counted twice. A run with no step times keeps the first-write-to-now total.
+- Times of an hour or more now show seconds too (`1h 05m 03s`), so they add up as well.
+- A flow in progress during `/reload-plugins` (or a mod update) keeps being followed to its end instead of showing as "left by an earlier process ↷ abandoned 0%". A run whose flow's steps were edited in the rules file meanwhile still ends as abandoned.
+
 ## 0.3.2 — 2026-10-28
 
 ### Added

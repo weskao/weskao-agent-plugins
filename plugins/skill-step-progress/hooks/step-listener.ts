@@ -1,5 +1,6 @@
 import type { EngineInterface, On } from 'claude-code'
 
+import type { SavedRun } from '../types'
 import { archive, commits, init, step } from './state-writer'
 
 // Tracks /commit, and the flows a rules file adds, by watching what they run, so their .md files carry no progress
@@ -231,10 +232,10 @@ type Run = {
 // commands means it stopped (a /merge-into-main with nothing to merge), so it is not shown in progress for good
 const IDLE_TURNS = 2
 // one run per flow and loop: /commit typed while /release waits for its intro keeps both, each in its own pane box, and a
-// sub-agent's /commit is another box beside the main one
-// shortcut: lives in this process only (lost on /reload-plugins mid-run, then archived as abandoned by the pane's scan);
-// move to $.state if that bites
+// sub-agent's /commit is another box beside the main one. Saved to $.state after each change (`save`), so the module a
+// /reload-plugins starts over follows them on (`restore`); a crash or `--resume` still leaves them to the pane's scan.
 const runs = new Map<string, Run>()
+const RUNS = { plugin: 'skill-step-progress', key: 'runs' } as const
 const runKey = (skill: string, agentId?: string) => (agentId ? `${skill}@${agentId}` : skill)
 // The main loop's turn as this mod last saw it: set at turn.start, cleared once this mod's turn.complete for it is done.
 // A /name queued over a Stop-hook continuation is submitted with no turnId (the engine already ended that turn) yet can
@@ -343,7 +344,42 @@ export async function startRun($: EngineInterface, skill: string, from: { overTu
     run.at = await dir
     await init($, run.at, rule.steps, agent && `sub-agent ${agent}`)
   })
+  await save($)
   void $.ui.open({ id: PANE, title: TITLE })
+}
+
+// Queued behind the state writes, so what it saves is never ahead of the run's state file
+function save($: EngineInterface) {
+  return write(async () => {
+    const list: SavedRun[] = []
+    for (const r of runs.values()) {
+      if (r.at === undefined) continue
+      const trees = await Promise.all([...r.trees].map(async ([cwd, h]): Promise<[string, string | null]> => [cwd, await h]))
+      list.push({ key: r.key, skill: r.skill, at: r.at, steps: r.rule.steps, step: r.step, failedAt: r.failedAt, trees, listed: r.listed, ...(r.agentId !== undefined && { agentId: r.agentId }), worked: r.worked, idle: r.idle })
+    }
+    await $.state.set(RUNS, list)
+  })
+}
+
+/** progress-pane.tsx's session.start (a load, or a /reload-plugins mid-run): follows on the runs the last module saved */
+export async function restore($: EngineInterface) {
+  let saved: SavedRun[] = []
+  try {
+    const { value } = await $.state.get(RUNS)
+    if (Array.isArray(value)) saved = value
+  } catch {
+    // nothing saved, or a host without it: the pane's scan ends any leftover as before
+  }
+  for (const s of saved) {
+    const rule = Object.hasOwn(rules, s.skill) ? rules[s.skill]! : undefined
+    // a flow removed, paused or given other steps since no longer fits the run's state file: the scan ends it
+    if (!rule || runs.has(s.key) || JSON.stringify(rule.steps) !== JSON.stringify(s.steps)) continue
+    // only a run still in progress there: one archived meanwhile must not be archived twice
+    const live = await $.fs.read(`${s.at}/current.json`).then(t => (JSON.parse(t) as { status?: string }).status, () => undefined)
+    if (live !== 'in_progress') continue
+    const trees = new Map(s.trees.map(([cwd, h]): [string, Promise<string | null>] => [cwd, Promise.resolve(h)]))
+    runs.set(s.key, { key: s.key, skill: s.skill, rule, dir: Promise.resolve(s.at), at: s.at, step: s.step, failedAt: s.failedAt, trees, listed: s.listed, overTurn: undefined, agentId: s.agentId, worked: s.worked, idle: s.idle })
+  }
 }
 
 /** whether this process follows the run whose state is in `dir`: one it does not (a crash, --resume or reload) is nobody's */
@@ -358,10 +394,11 @@ export function abandon($: EngineInterface, dir: string) {
 }
 
 // progress-pane.tsx's session.end calls this: /clear and /resume change the session id, so the folder these runs write to
-export function reset() {
+export function reset($: EngineInterface) {
   runs.clear()
   repo = null
   running = undefined
+  return save($)
 }
 
 async function git($: EngineInterface, args: string[], cwd?: string): Promise<string | null> {
@@ -454,6 +491,7 @@ export async function trackBash<R extends { isError?: boolean }>($: EngineInterf
     // read back from HEAD: a push that first rebases onto the remote gives the sent commits new hashes, on top
     if (sending > 0 && !ran.isError) await listCommits($, cur, await git($, log(sending), tree))
   }
+  await save($)
   return ran
 }
 
@@ -495,6 +533,7 @@ export function listen(on: On) {
       // kept until archived: the pane's scan takes an in-progress run nobody follows for a leftover
       runs.delete(run.key)
     }
+    if (live.length > 0) await save($)
     if (e.agentId === undefined && running === e.turnId) running = undefined
     return ran
   }).catch(($, e, next) => next(e))

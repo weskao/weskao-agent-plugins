@@ -10,6 +10,8 @@ export type Step = {
   isMain: boolean
   /** time spent (`ended_at - started_at`, or up to now while it runs); null when the writer stamped no start */
   ms: number | null
+  /** share of the run in whole percents; null without a time or a run total. Main steps add up to exactly 100 */
+  pct: number | null
 }
 
 export type Commit = { hash: string; subject: string }
@@ -31,7 +33,8 @@ export type Tracker = {
   /** commits the run made (step-listener.ts writes them for /commit and /release), oldest first */
   commits: Commit[]
   updatedAt: string | null
-  /** whole run: first write to now (live) or to the last write (archived); null without a start time */
+  /** whole run: the main steps' times added up (whole seconds) when any carries one, else first write to now (live) or
+   *  to the last write (archived); null without a start time */
   totalMs: number | null
   idleDays: number
 }
@@ -80,6 +83,26 @@ export type RuleRow = {
   error: string | null
 }
 
+/**
+ * A watched run in flight, as step-listener.ts saves it after each change, so the module a /reload-plugins starts over
+ * follows it on: its flow is looked up again by `skill`, and only while that flow still has these `steps`.
+ */
+export type SavedRun = {
+  key: string
+  skill: string
+  /** the run's state folder */
+  at: string
+  steps: string[]
+  step: number
+  failedAt: number | null
+  /** per work tree ('' the session's): HEAD when the run first worked there */
+  trees: [string, string | null][]
+  listed: string
+  agentId?: string
+  worked: boolean
+  idle: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'skill-step-progress': {
@@ -94,6 +117,8 @@ declare module 'claude-code' {
       confirming: string
       /** /progress-close: tracking and the pane are off; mirrored in `$.store` so it survives new sessions */
       isOff: boolean
+      /** the listener's runs in flight, kept across /reload-plugins; never written before 0.3.3, so read as none */
+      runs: SavedRun[]
     }
   }
 }

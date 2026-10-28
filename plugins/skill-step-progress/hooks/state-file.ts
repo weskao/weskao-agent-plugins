@@ -141,6 +141,19 @@ function stepMs(v: unknown, running: boolean, nowMs: number): number | null {
   return Number.isNaN(ms) ? null : Math.max(0, ms)
 }
 
+/**
+ * Largest remainder: whole units that add up to exactly `target`, each within 1 of its exact share. Integer inputs
+ * only, so the floors and remainders carry no float error.
+ */
+export function apportion(values: number[], target: number): number[] {
+  const sum = values.reduce((a, b) => a + b, 0)
+  if (sum <= 0) return values.map(() => 0)
+  const out = values.map(v => Math.floor((v * target) / sum))
+  const byRemainder = values.map((v, i) => i).sort((a, b) => ((values[b] ?? 0) * target) % sum - ((values[a] ?? 0) * target) % sum || a - b)
+  for (const i of byRemainder.slice(0, target - out.reduce((a, b) => a + b, 0))) out[i] = (out[i] ?? 0) + 1
+  return out
+}
+
 /** null when the file is not a step tracker; a `completed` one counts only when read from history (`archived`). */
 export function buildTracker(
   json: StateFile,
@@ -167,9 +180,26 @@ export function buildTracker(
       status,
       isMain: MAIN_ID.test(id),
       ms: stepMs(stepMap[id], !archived && status === 'in_progress', nowMs),
+      pct: null as number | null,
     }
   })
   const main = steps.filter(s => s.isMain)
+  // The run's time is its main steps' times (sub-steps run inside theirs). Whole seconds and whole percents are shared
+  // out by largest remainder, so what the pane shows adds up: the steps' times to the total, the shares to 100%.
+  const timed = main.filter(s => s.ms != null)
+  const runMs = timed.reduce((sum, s) => sum + (s.ms ?? 0), 0)
+  const runSec = Math.round(runMs / 1000)
+  if (runMs > 0) {
+    const exact = timed.map(s => Math.round(s.ms ?? 0))
+    const secs = apportion(exact, runSec)
+    const pcts = apportion(exact, 100)
+    timed.forEach((s, i) => {
+      s.ms = (secs[i] ?? 0) * 1000
+      s.pct = pcts[i] ?? 0
+    })
+    // a sub-step's share is of the run too, but it is nested in a main step, so it is not part of the 100%
+    for (const s of steps) if (!s.isMain && s.ms != null) s.pct = Math.round((s.ms / runMs) * 100)
+  }
   const joined = [...new Set(LABEL_KEYS.map(k => json[k]).filter(v => typeof v === 'string' || typeof v === 'number').map(String))]
     .filter(v => v !== '')
     .slice(0, 2)
@@ -197,7 +227,7 @@ export function buildTracker(
     steps,
     commits: Array.isArray(json.commits) ? json.commits.filter(isCommit) : [],
     updatedAt,
-    totalMs: Number.isNaN(totalMs) ? null : Math.max(0, totalMs),
+    totalMs: runMs > 0 ? runSec * 1000 : Number.isNaN(totalMs) ? null : Math.max(0, totalMs),
     idleDays: Number.isNaN(updatedMs) ? 0 : Math.floor((nowMs - updatedMs) / 86_400_000),
   }
 }

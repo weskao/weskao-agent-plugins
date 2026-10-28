@@ -6,7 +6,7 @@ import { buildTracker, fitText, parseOutline, textWidth } from './state-file'
 import type { Outline } from './state-file'
 import { listRules, pauseRule, removeRule, rowText, RULES_TOOL, runAction } from './rules-edit'
 import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
-import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
+import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, restore, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
 
 const trackers = atom({ plugin: 'skill-step-progress', key: 'trackers' } as const, [])
 const expanded = atom({ plugin: 'skill-step-progress', key: 'expanded' } as const, null)
@@ -62,27 +62,27 @@ const LAST_RUN_DONE = { text: '  ✔ last run', color: 'success' }
 const COMMIT_TYPE = /^(\w+)(?:\([^)]*\))?!?:/
 const TYPE_COLOR: Record<string, string> = { feat: 'success', fix: 'error', revert: 'warning' }
 
-// A step's time: `45s`, `12m 05s`, `1h 05m`; at most 7 columns below 100 hours.
+// A step's time: `45s`, `12m 05s`, `1h 05m 03s`; whole seconds always, so the steps' times add up to the total's.
 const two = (n: number) => String(n).padStart(2, '0')
 export const duration = (ms: number) => {
   const s = Math.floor(ms / 1000)
   if (s < 60) return `${s}s`
   if (s < 3600) return `${Math.floor(s / 60)}m ${two(s % 60)}s`
-  return `${Math.floor(s / 3600)}h ${two(Math.floor(s / 60) % 60)}m`
+  return `${Math.floor(s / 3600)}h ${two(Math.floor(s / 60) % 60)}m ${two(s % 60)}s`
 }
 // A step's share of the run's time, in prompt-toc's tiers (its `share`, from the statusline): 50% or more red, 25% or
-// more yellow and both bold, else the theme's subtle gray. A step that took some time but rounds to 0 reads `<1%`.
-export const share = (ms: number, total: number) => {
-  const pct = Math.round((ms / total) * 100)
+// more yellow and both bold, else the theme's subtle gray. A step that took some time but holds 0% reads `<1%`.
+export const share = (pct: number, ms: number) => {
   return {
     label: pct === 0 && ms > 0 ? '<1%' : `${pct}%`,
     color: pct >= 50 ? 'error' : pct >= 25 ? 'warning' : 'subtle',
     bold: pct >= 25,
   }
 }
-// The time column: duration padded to 7 + gap + percent padded to 4. Under MIN_TITLE columns left for a title, the
-// duration goes first and only the colored percent stays: the title is what says which step it is.
-const TIME_COLS = 7 + 1 + 4
+// The time column: duration padded to 7 (11 once the run passes an hour: `12h 05m 03s`) + gap + percent padded to 4.
+// Under MIN_TITLE columns left for a title, the duration goes first and only the colored percent stays: the title is
+// what says which step it is.
+const durCols = (runMs: number) => (runMs >= 3_600_000 ? 11 : 7)
 const PCT_COLS = 4
 const MIN_TITLE = 16
 
@@ -422,6 +422,8 @@ export const register: Register = on => {
     if ((await $.store.get(STORE_KEY)) !== undefined) await $.store.delete(STORE_KEY)
     // before the scan: a restored flow from the rules file is read from the temp folder, like one started here
     await loadRules($)
+    // a /reload-plugins mid-run: the runs the last module followed are followed on, so the scan does not end them
+    await restore($)
     await refresh($, restored)
     await refreshRules($)
     // old sessions' temp folders go; the OS alone does not clear them everywhere
@@ -442,7 +444,7 @@ export const register: Register = on => {
   // three. Exit, a finished `-p` run and signals (`prompt_input_exit`, `other`) end the process, pane included.
   on('session.end', async ($, e, next) => {
     // the listener's runs belong to the old session id too; a process-ending reason loses them anyway
-    reset()
+    await reset($)
     if (e.reason === 'clear' || e.reason === 'resume' || e.reason === 'logout') await $.ui.close({ id: PANE })
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -452,7 +454,7 @@ export const register: Register = on => {
     await $.state.set(OFF, true)
     await $.store.set('isOff', true)
     // a run in flight is dropped, not left to end with a toast the person turned off
-    reset()
+    await reset($)
     await update($, trackers, () => [])
     await $.ui.close({ id: PANE })
     return { text: OFF_NOTE }
@@ -641,7 +643,9 @@ export const register: Register = on => {
     const stepRow = (t: Tracker, s: Step, runMs: number) => {
       const isCurrent = !t.archived && s.id === t.currentStep
       const icon = ICON[s.status]
-      const time = s.ms != null && runMs > 0 ? share(s.ms, runMs) : null
+      const time = s.ms != null && s.pct != null ? share(s.pct, s.ms) : null
+      const dCols = durCols(runMs)
+      const TIME_COLS = dCols + 1 + 4
       // a main step that finished with no time of its own (no command marks it, so the neighbor's clock ran over it)
       // reads `—`, not blank; a run with no times at all (older writers) stays blank throughout
       const gap = time == null && runMs > 0 && s.isMain && s.status === 'done'
@@ -680,7 +684,7 @@ export const register: Register = on => {
           {time && (
             // padded, not sized: every row's column lines up, and a 100h+ run overflows into the title's `truncate-end` net
             <Box flexShrink={0}>
-              {showDuration && <Text dimColor={!isCurrent} color={isCurrent ? 'claude' : undefined}>{`${duration(s.ms ?? 0).padStart(7)} `}</Text>}
+              {showDuration && <Text dimColor={!isCurrent} color={isCurrent ? 'claude' : undefined}>{`${duration(s.ms ?? 0).padStart(dCols)} `}</Text>}
               <Text color={time.color} bold={time.bold}>{time.label.padStart(PCT_COLS)}</Text>
             </Box>
           )}

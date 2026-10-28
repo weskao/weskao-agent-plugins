@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { buildTracker, fitText, parseOutline } from './state-file'
+import { apportion, buildTracker, fitText, parseOutline } from './state-file'
 
 const MD = `
 **\`TOTAL_STEPS = 5\`**
@@ -262,4 +262,31 @@ test('total time: start to now when live, start to last write when archived, nul
   expect(buildTracker({ ...base, status: 'in_progress' }, o, 's', 'r', now)?.totalMs).toBe(30 * 60_000)
   expect(buildTracker({ ...base, status: 'completed' }, o, 's', 'r', now, 0, true)?.totalMs).toBe(5 * 60_000)
   expect(buildTracker({ status: 'in_progress', steps: {} }, o, 's', 'r', now)?.totalMs).toBe(null)
+})
+
+test('apportion shares whole units by largest remainder and always adds up to the target', () => {
+  expect(apportion([3333, 3333, 3333], 10)).toEqual([4, 3, 3])
+  expect(apportion([1, 1, 1], 100)).toEqual([34, 33, 33])
+  expect(apportion([0, 0], 5)).toEqual([0, 0])
+  for (const values of [[1, 2, 3], [999, 1, 1], [7, 7, 7, 7, 7, 7, 7], [123456, 789, 42]]) {
+    for (const target of [1, 59, 100, 3725]) expect(apportion(values, target).reduce((a, b) => a + b, 0)).toBe(target)
+  }
+})
+
+test("the main steps' times add up to the total and their shares to 100%, however the seconds fall", () => {
+  const at = (ms: number) => new Date(Date.parse('2026-10-28T10:00:00+08:00') + ms).toISOString()
+  // three steps of 3.333s each: floored they read 3s + 3s + 3s = 9s against a 10s total
+  const steps = {
+    '1': { status: 'done', started_at: at(0), ended_at: at(3333) },
+    '2': { status: 'done', started_at: at(3333), ended_at: at(6666) },
+    '2.1': { status: 'done', started_at: at(4000), ended_at: at(5000) },
+    '3': { status: 'done', started_at: at(6666), ended_at: at(9999) },
+  }
+  const t = buildTracker({ status: 'completed', steps, started_at: at(0), updated_at: at(20_000) }, parseOutline(''), 's', 'r', 0, 0, true)
+  const main = t?.steps.filter(s => s.isMain) ?? []
+  expect(main.reduce((sum, s) => sum + (s.ms ?? 0), 0)).toBe(t?.totalMs)
+  expect(t?.totalMs).toBe(10_000)
+  expect(main.reduce((sum, s) => sum + (s.pct ?? 0), 0)).toBe(100)
+  // the sub-step is inside step 2: not part of the total or the 100%
+  expect(t?.steps.find(s => s.id === '2.1')?.pct).toBe(10)
 })
