@@ -35,8 +35,6 @@ It shows two kinds of runs:
 
 A `/commit` run from start to finish, then its box once it is done:
 
-![The Progress pane following a /commit run step by step](screenshots/progress-commit-demo.gif?v=3)
-
 https://github.com/user-attachments/assets/6a8df983-44b6-4204-a9e2-a4ad8426135e
 
 ![A finished /commit run with its commits and each step's time](screenshots/progress-commit-finished.jpeg?v=3)
