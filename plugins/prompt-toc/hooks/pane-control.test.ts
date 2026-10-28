@@ -5,6 +5,38 @@ import type { Engine } from 'claude-code/testing'
 // the test runtime has timers; the es2023 lib the type check uses does not declare them
 declare function setTimeout(fn: (value: unknown) => void, ms: number): unknown
 
+// Fakes the pane surface: which panes are open, and which sit behind another tab (an open brings one to the front).
+function panes(on: On) {
+  const s = { open: new Set<string>(), hidden: new Set<string>(), calls: [] as string[] }
+  on('ui.open', async (_$, e) => (s.open.add(e.id), s.hidden.delete(e.id), s.calls.push('open'), { value: { isPlaced: true } }) as never)
+  on('ui.close', async (_$, e) => (s.open.delete(e.id), s.calls.push('close'), { value: undefined }) as never)
+  on('ui.panes', async () => ({ value: [...s.open].map(id => ({ id, title: id, isShown: !s.hidden.has(id), isFocused: false, isPlaced: true })) }) as never)
+  return s
+}
+
+const run = async ($: Engine, args: string) => ((await $.command.run({ command: 'prompt-toc', args } as never)) as { text: string }).text
+
+test('a bare /prompt-toc toggles the pane: opens a closed one, closes a shown one', async ($, on) => {
+  const s = panes(on)
+  expect([await run($, ''), await run($, '')]).toEqual(['prompt-toc pane opened.', 'prompt-toc pane closed.'])
+  expect(s.calls).toEqual(['open', 'close'])
+})
+
+test('/prompt-toc <keyword> always opens, even with the pane shown', async ($, on) => {
+  const s = panes(on)
+  await run($, '')
+  expect(await run($, 'beta')).toBe('prompt-toc pane opened, filtered by "beta" (/prompt-toc clears it).')
+  expect(s.calls).toEqual(['open', 'open'])
+})
+
+test('a bare /prompt-toc brings a pane behind another tab to the front instead of closing it', async ($, on) => {
+  const s = panes(on)
+  await run($, '')
+  s.hidden.add('prompt-toc')
+  expect(await run($, '')).toBe('prompt-toc pane opened.')
+  expect(s.calls).toEqual(['open', 'open'])
+})
+
 test('mcp__prompt-toc__pane opens and closes the pane', async ($, on) => {
   const calls: string[] = []
   on('ui.open', async () => {

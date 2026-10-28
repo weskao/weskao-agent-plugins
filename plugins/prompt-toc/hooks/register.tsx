@@ -413,7 +413,7 @@ export const register: Register = (on, options) => {
   })
 
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'prompt-toc', description: 'Open the prompt/heading index pane, optionally filtered', argumentHint: '[keyword]' })
+    await $.command.register({ name: 'prompt-toc', description: 'Toggle the prompt/heading index pane; a keyword opens it filtered', argumentHint: '[keyword]' })
     // /prompt-toc-open and /prompt-toc-close; the choice is kept across sessions in $.store
     try {
       await $.command.register({ name: 'prompt-toc-open', description: 'Turn prompt-toc on' })
@@ -462,9 +462,14 @@ export const register: Register = (on, options) => {
     return started
   })
 
-  // /prompt-toc <keyword> opens the pane filtered; no argument clears the filter
+  // /prompt-toc <keyword> opens the pane filtered; no argument toggles it, clearing the filter when it opens.
+  // A pane behind another tab is brought to the front, not closed.
   on('command.run', { command: 'prompt-toc' }, async ($, e) => {
     const kw = e.args.trim()
+    if (!kw && (await $.ui.panes()).some(p => p.id === PANE && p.isShown)) {
+      await $.ui.close({ id: PANE })
+      return { text: 'prompt-toc pane closed.' }
+    }
     await update($, keyword, () => kw)
     await resetWindow($)
     await openPane($)

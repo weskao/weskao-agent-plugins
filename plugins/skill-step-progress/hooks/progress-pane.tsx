@@ -397,7 +397,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'progress',
-      description: "Open or close this session's step progress pane: /commit, the flows in your rules file, and skills that save their own progress state",
+      description: "Toggle this session's step progress pane: /commit, the flows in your rules file, and skills that save their own progress state",
       argumentHint: HINT,
     })
     // the shortcuts for /progress's subcommands, the on/off switch and /progress-time; a refused one must not stop the rest
@@ -449,7 +449,6 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // Bare `/progress` keeps opening, as before the subcommands existed.
   on('command.run', { command: 'progress-close' }, async $ => {
     await $.state.set(OFF, true)
     await $.store.set('isOff', true)
@@ -495,6 +494,11 @@ export const register: Register = on => {
     }
     if (arg !== '' && arg !== 'open') return { text: USAGE }
     if (await isOff($)) return { text: OFF_NOTE }
+    // bare `/progress` toggles; a pane behind another tab is brought to the front, not closed
+    if (arg === '' && (await $.ui.panes()).some(p => p.id === PANE && p.isShown)) {
+      await $.ui.close({ id: PANE })
+      return { text: 'Progress pane closed.' }
+    }
     await refresh($)
     await $.ui.open({ id: PANE, title: TITLE })
     return { text: 'Progress pane opened.' }

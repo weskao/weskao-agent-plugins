@@ -2,6 +2,12 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.9.0 — 2026-10-28
+
+### Changed
+
+- **A bare `/prompt-toc` now toggles the pane.** It closes the pane when the pane is the one shown, and opens it otherwise, clearing the filter. A pane sitting behind another tab is brought to the front, not closed. `/prompt-toc <keyword>` still always opens the pane, filtered.
+
 ## 0.8.1 — 2026-10-22
 
 ### Fixed

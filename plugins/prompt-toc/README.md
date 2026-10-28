@@ -15,7 +15,8 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 | Command | Does |
 | --- | --- |
-| `/prompt-toc [keyword]` | Open the pane, optionally filtered to rows containing the keyword |
+| `/prompt-toc` | Toggle the pane: close it when shown, otherwise open it (a pane behind another tab comes to the front) |
+| `/prompt-toc <keyword>` | Open the pane filtered to rows containing the keyword |
 | `/prompt-toc-open`, `/prompt-toc-close` | Turn the mod on or off |
 | `/prompt-toc-export [path]` | Write the index as a Markdown file |
 | `/prompt-toc-update` | Update to the latest version (then restart Claude Code) |

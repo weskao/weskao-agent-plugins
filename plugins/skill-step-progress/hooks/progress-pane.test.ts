@@ -122,17 +122,25 @@ function fakeHost(on: On, store: Record<string, unknown>, paneCalls: string[] = 
   })
   on('session.start', async ($, e) => e as never)
   on('session.end', async ($, e) => ({ sessionId: e.sessionId }) as never)
-  on('ui.open', async () => {
+  // hidden: open panes another tab sits in front of; an open brings one to the front
+  const open = new Set<string>()
+  const hidden = new Set<string>()
+  on('ui.open', async ($, e) => {
     paneCalls.push('open')
+    open.add(e.id)
+    hidden.delete(e.id)
     return { value: { isPlaced: true } } as never
   })
-  on('ui.close', async () => {
+  on('ui.close', async ($, e) => {
     paneCalls.push('close')
+    open.delete(e.id)
     return { value: undefined } as never
   })
+  on('ui.panes', async () => ({ value: [...open].map(id => ({ id, title: id, isShown: !hidden.has(id), isFocused: false, isPlaced: true })) }) as never)
   on('skill.prompt', async ($, e) => ({ text: e.text }) as never)
   on('prompt.submit', async ($, e) => e as never)
   on('tool.call', async () => ({ result: 'ok', text: 'ok' }) as never)
+  return { hidden }
 }
 
 test('shows only SOPs invoked in this session, and remembers them per session id', async ($, on) => {
@@ -278,15 +286,32 @@ test('a run marked completed but not archived is the last run, not the older arc
   expect(await ui.find({ text: /last run/ })).toBeDefined()
 })
 
-test('/progress open|close opens and closes the pane; bare opens; anything else shows usage', async ($, on) => {
+test('/progress open|close opens and closes the pane; anything else shows usage', async ($, on) => {
   const paneCalls: string[] = []
   fakeHost(on, {}, paneCalls)
 
   expect((await $.command.run({ command: 'progress', args: 'close' } as never)).text).toBe('Progress pane closed.')
   expect((await $.command.run({ command: 'progress', args: ' OPEN ' } as never)).text).toBe('Progress pane opened.')
-  expect((await $.command.run({ command: 'progress', args: '' } as never)).text).toBe('Progress pane opened.')
+  expect((await $.command.run({ command: 'progress', args: 'open' } as never)).text).toBe('Progress pane opened.')
   expect((await $.command.run({ command: 'progress', args: 'toggle' } as never)).text).toMatch(/^Usage: \/progress \[open\|close\|history\|forget <skill>\|rules/)
   expect(paneCalls).toEqual(['close', 'open', 'open'])
+})
+
+test('a bare /progress toggles the pane: opens a closed one, closes a shown one', async ($, on) => {
+  const paneCalls: string[] = []
+  fakeHost(on, {}, paneCalls)
+  const run = async () => (await $.command.run({ command: 'progress', args: '' } as never)).text
+  expect([await run(), await run()]).toEqual(['Progress pane opened.', 'Progress pane closed.'])
+  expect(paneCalls).toEqual(['open', 'close'])
+})
+
+test('a bare /progress brings a pane behind another tab to the front instead of closing it', async ($, on) => {
+  const paneCalls: string[] = []
+  const { hidden } = fakeHost(on, {}, paneCalls)
+  await $.command.run({ command: 'progress', args: 'open' } as never)
+  hidden.add('skill-step-progress')
+  expect((await $.command.run({ command: 'progress', args: '' } as never)).text).toBe('Progress pane opened.')
+  expect(paneCalls).toEqual(['open', 'open'])
 })
 
 test('session.start registers the shortcut commands next to /progress', async ($, on) => {

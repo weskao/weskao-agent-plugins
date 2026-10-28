@@ -15,7 +15,7 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `git` on `PATH`. W
 
 ## Use
 
-`/progress` opens or closes the pane (`/progress open`, `/progress close`, `/progress history` lists this session's finished runs with status, time and why, `/progress forget <skill>` drops a skill from this session's list, `/progress rules` manages your flows). The pane opens on its own when a run starts. With no run in progress, it lists the flows tracked on this computer, read from your own rules file. A run that fails or is abandoned also shows a toast, so you notice it with the pane closed. You can also ask Claude in plain words to open or close the Progress pane.
+`/progress` toggles the pane: it closes the pane when shown and opens it otherwise, bringing a pane behind another tab to the front (`/progress open` and `/progress close` always open or close, `/progress history` lists this session's finished runs with status, time and why, `/progress forget <skill>` drops a skill from this session's list, `/progress rules` manages your flows). The pane opens on its own when a run starts. With no run in progress, it lists the flows tracked on this computer, read from your own rules file. A run that fails or is abandoned also shows a toast, so you notice it with the pane closed. You can also ask Claude in plain words to open or close the Progress pane.
 
 | Command | What it does |
 | --- | --- |
@@ -34,6 +34,8 @@ It shows two kinds of runs:
 - **Skills that write their own state** to `~/.claude/usage-data/<skill>/<repo>/current.json` (under `CLAUDE_CONFIG_DIR` when set; archived under `history/`). The shape is `StateFileContract` in [`types/index.d.ts`](types/index.d.ts). A skill whose folder has its own name needs no setup. A command whose folder is named differently (`/orch:task` writing `orch-task`) gets a state flow in your rules file (see below).
 
 A `/commit` run from start to finish, then its box once it is done:
+
+![The Progress pane following a /commit run step by step](screenshots/progress-commit-demo.gif?v=3)
 
 https://github.com/user-attachments/assets/6a8df983-44b6-4204-a9e2-a4ad8426135e
 

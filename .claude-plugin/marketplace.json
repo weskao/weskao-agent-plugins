@@ -12,7 +12,7 @@
       "name": "prompt-toc",
       "source": "./plugins/prompt-toc",
       "description": "Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export",
-      "version": "0.8.1",
+      "version": "0.9.0",
       "author": {
         "name": "weskao",
         "url": "https://github.com/weskao"
@@ -83,7 +83,7 @@
       "name": "skill-step-progress",
       "source": "./plugins/skill-step-progress",
       "description": "Live pane showing the current step and overall progress of this session's flows, one box per run: /commit (and any flow you add in ~/.claude/skill-step-progress/rules.json) by watching the commands it runs, and skills that write their own state to ~/.claude/usage-data/<skill>/<repo>/current.json",
-      "version": "0.3.3",
+      "version": "0.4.0",
       "author": {
         "name": "weskao",
         "url": "https://github.com/weskao"

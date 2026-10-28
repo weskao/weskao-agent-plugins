@@ -2,6 +2,12 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.0 — 2026-10-28
+
+### Changed
+
+- **A bare `/progress` now toggles the pane.** It closes the pane when the pane is the one shown, and opens it otherwise. A pane sitting behind another tab is brought to the front, not closed. `/progress open` and `/progress close` still always open or close, and `/progress-open` / `/progress-close` still turn tracking on or off.
+
 ## 0.3.3 — 2026-10-28
 
 ### Fixed
