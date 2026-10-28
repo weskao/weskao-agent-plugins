@@ -17,6 +17,15 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `git` on `PATH`. W
 
 `/progress` opens or closes the pane (`/progress open`, `/progress close`, `/progress history` lists this session's finished runs with status, time and why, `/progress forget <skill>` drops a skill from this session's list, `/progress rules` manages your flows). The pane opens on its own when a run starts. With no run in progress, it lists the flows tracked on this computer, read from your own rules file. A run that fails or is abandoned also shows a toast, so you notice it with the pane closed. You can also ask Claude in plain words to open or close the Progress pane.
 
+| Command | What it does |
+| --- | --- |
+| `/progress-open`, `/progress-close` | Turn Progress on or off. Off stops tracking flows and closes the pane; the choice is kept across sessions |
+| `/progress-history` | Same as `/progress history` |
+| `/progress-rules [show\|pause <name>\|resume <name>\|remove <name>]` | Same as `/progress rules` |
+| `/progress-forget <skill>` | Same as `/progress forget <skill>` |
+| `/progress-time` | Each run's total time and its steps' times, as text |
+| `/progress-update` | Same as `/skill-step-progress-update` |
+
 ![/progress history listing a finished /commit run](screenshots/progress-history.jpeg)
 
 It shows two kinds of runs:

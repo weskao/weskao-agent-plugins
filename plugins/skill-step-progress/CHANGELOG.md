@@ -2,6 +2,14 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.2 — 2026-10-28
+
+### Added
+
+- `/progress-open` and `/progress-close` turn Progress on and off. Off stops tracking flows, drops the runs in flight and closes the pane, and `/progress`, the pane tool and a typed skill no longer open or record anything; the choice is kept across sessions.
+- Each `/progress` subcommand has its own command, so it shows in the `/` menu: `/progress-history`, `/progress-rules`, `/progress-forget <skill>`. `/progress-update` is another name for `/skill-step-progress-update`. The `/progress` subcommands work as before.
+- `/progress-time` lists each run's total time and its steps' times as text, with no pane needed.
+
 ## 0.3.1 — 2026-10-28
 
 ### Added

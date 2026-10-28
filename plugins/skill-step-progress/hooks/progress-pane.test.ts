@@ -292,7 +292,8 @@ test('/progress open|close opens and closes the pane; bare opens; anything else 
 test('session.start registers the shortcut commands next to /progress', async ($, on) => {
   const commands: { name?: string }[] = []
   fakeHost(on, {}, [], commands)
-  await $.session.start({ sessionId: 'sess-1' } as never)
+  mock.clock(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
   expect(commands.map(c => c.name)).toEqual(expect.arrayContaining(['progress', 'progress-open', 'progress-close', 'progress-history', 'progress-rules', 'progress-forget', 'progress-time', 'progress-update']))
 })
 
