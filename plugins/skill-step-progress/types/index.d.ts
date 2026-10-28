@@ -31,6 +31,8 @@ export type Tracker = {
   /** commits the run made (step-listener.ts writes them for /commit and /release), oldest first */
   commits: Commit[]
   updatedAt: string | null
+  /** whole run: first write to now (live) or to the last write (archived); null without a start time */
+  totalMs: number | null
   idleDays: number
 }
 

@@ -254,3 +254,12 @@ test('commits keep only well-formed entries; none is an empty list', () => {
   expect(buildTracker({ status: 'in_progress', steps, commits }, o, 's', 'r', 0)?.commits).toEqual([{ hash: 'aaa1111', subject: 'feat: a' }])
   expect(buildTracker({ status: 'in_progress', steps }, o, 's', 'r', 0)?.commits).toEqual([])
 })
+
+test('total time: start to now when live, start to last write when archived, null without a start', () => {
+  const o = parseOutline('')
+  const base = { steps: { '1': 'done' }, started_at: '2026-10-28T10:00:00+0800', updated_at: '2026-10-28T10:05:00+0800' }
+  const now = Date.parse('2026-10-28T10:30:00+08:00')
+  expect(buildTracker({ ...base, status: 'in_progress' }, o, 's', 'r', now)?.totalMs).toBe(30 * 60_000)
+  expect(buildTracker({ ...base, status: 'completed' }, o, 's', 'r', now, 0, true)?.totalMs).toBe(5 * 60_000)
+  expect(buildTracker({ status: 'in_progress', steps: {} }, o, 's', 'r', now)?.totalMs).toBe(null)
+})

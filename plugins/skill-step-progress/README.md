@@ -1,6 +1,6 @@
 # skill-step-progress
 
-A live pane beside the chat that shows the current step and overall progress of this session's flows, one box per run, with each step's time and the commits a run made.
+A live pane beside the chat that shows the current step and overall progress of this session's flows, one box per run, with the run's total time, each step's time and the commits a run made.
 
 ![The Progress pane during a /commit run](screenshots/progress-commit-running.jpeg?v=2)
 

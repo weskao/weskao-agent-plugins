@@ -180,6 +180,7 @@ export function buildTracker(
   // No timestamp at all (new-theme-platform) → the file's mtime, so a stale run still reads as idle.
   const parsed = parseTime(updatedAt)
   const updatedMs = Number.isNaN(parsed) ? (fileMtimeMs ?? NaN) : parsed
+  const totalMs = (archived ? parseTime(json.updated_at) : nowMs) - parseTime(json.started_at)
   const outlineMain = Object.keys(outline.titles).filter(id => MAIN_ID.test(id)).length
   return {
     // Own key for the archive: a new run replacing it then counts as appearing and opens the pane.
@@ -196,6 +197,7 @@ export function buildTracker(
     steps,
     commits: Array.isArray(json.commits) ? json.commits.filter(isCommit) : [],
     updatedAt,
+    totalMs: Number.isNaN(totalMs) ? null : Math.max(0, totalMs),
     idleDays: Number.isNaN(updatedMs) ? 0 : Math.floor((nowMs - updatedMs) / 86_400_000),
   }
 }

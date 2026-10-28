@@ -683,6 +683,7 @@ export const register: Register = on => {
                 <Text dimColor>
                   {t.updatedAt ? `${t.archived ? 'finished' : 'updated'} ${shortStamp(t.updatedAt)}` : ''}
                 </Text>
+                {t.totalMs != null && <Text dimColor>{`total ${duration(t.totalMs)}`}</Text>}
                 {!t.archived && t.idleDays >= 3 && <Text color="warning">{`⚠ idle ${t.idleDays}d`}</Text>}
               </Box>
             </Box>

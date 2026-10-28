@@ -2,7 +2,11 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.2.1 — 2026-10-28
+## 0.3.0 — 2026-10-28
+
+### Added
+
+- Each run's box on the `/progress` pane shows the run's total time (`total 12m 05s`) in its footer: first state write to now while it runs, to the last write once it has finished.
 
 ### Fixed
 
