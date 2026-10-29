@@ -2,6 +2,13 @@
 
 All notable changes to message-clock. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 — 2026-10-29
+
+### Added
+
+- **A Time format setting in `/config`.** Pick `24-hour` (`15:04:05`, the default, as before) or `AM/PM`
+  (`03:04:05 PM`); a change applies as soon as it is made.
+
 ## 0.2.2 — 2026-10-22
 
 ### Fixed

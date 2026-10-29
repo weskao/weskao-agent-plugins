@@ -392,3 +392,21 @@ test('the first turn of a session not yet restored stamps its transcript rows (i
   const restored = await mountRow($, 'UserMessage', 'r-session-2')
   expect(await restored.find({ type: 'Text', text: fmt(T0) })).toBeDefined()
 })
+
+test('the AM/PM time format draws hh:MM:SS AM/PM instead of 24-hour', { options: { timeFormat: 'AM/PM' } }, async ($, on) => {
+  mock.clock(on, { now: T0 })
+  mock.session(on)
+  on('ui.render', ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>{(e.props as { text: string }).text}</Text>
+  })
+  await $.session.append({
+    door: 'prompt',
+    origin: { kind: 'composer' },
+    uuid: 'u1',
+    message: { type: 'user', role: 'user', content: [{ type: 'text', text: 'hi' }] },
+  } as never)
+  const user = await mountRow($, 'UserMessage', 'u1')
+  expect(await user.find({ type: 'Text', text: fmt(T0, true) })).toBeDefined()
+  expect(await user.find({ type: 'Text', text: /^\d\d:\d\d:\d\d$/ })).toBeUndefined()
+})

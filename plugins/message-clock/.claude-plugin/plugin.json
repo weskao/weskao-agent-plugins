@@ -1,9 +1,18 @@
 {
   "name": "message-clock",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Grok-style right-aligned clock on each sent prompt and each reply message",
   "author": { "name": "weskao", "url": "https://github.com/weskao" },
   "license": "MIT",
   "keywords": ["mod", "clock", "timestamp", "transcript"],
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "timeFormat": {
+      "type": "string",
+      "title": "Time format",
+      "description": "How each message's time is drawn: 24-hour (15:04:05) or AM/PM (03:04:05 PM)",
+      "options": ["24-hour", "AM/PM"],
+      "default": "24-hour"
+    }
+  }
 }

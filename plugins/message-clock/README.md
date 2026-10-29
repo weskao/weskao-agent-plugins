@@ -13,7 +13,9 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `python3` on `PATH
 
 ## Use
 
-Nothing to configure: once installed, the time shows beside each message, in the same gray band as the prompt.
+Once installed, the time shows beside each message, in the same gray band as the prompt.
+
+**Time format** in `/config` picks how it is drawn: `24-hour` (`15:04:05`, the default) or `AM/PM` (`03:04:05 PM`).
 
 `/message-clock-update` updates to the latest version (then restart Claude Code); at each session start a toast says when a newer version is published (the version list is fetched at most every 10 minutes).
 

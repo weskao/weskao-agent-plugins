@@ -42,7 +42,10 @@ async function restore($: EngineInterface, transcript?: string) {
   } catch {}
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // the /config "Time format" row (userConfig); a change there reloads this module with the new value
+  const hour12 = options.timeFormat === 'AM/PM'
+
   // a launch, a reload or a --resume launch; unawaited so a big transcript never holds the first prompt
   on('session.start', async ($, e, next) => {
     await registerUpdate($)
@@ -111,7 +114,7 @@ export const register: Register = on => {
         <Box flexDirection="column" flexGrow={1} flexShrink={1}>{drawn}</Box>
         {/* a message row opens with a blank margin line; skip it so the time sits beside the text (an output row has none) */}
         <Box flexShrink={0} marginTop={isOutput ? 0 : 1} paddingLeft={1} paddingRight={1} backgroundColor={bg}>
-          <Text dimColor backgroundColor={bg}>{fmt(at)}</Text>
+          <Text dimColor backgroundColor={bg}>{fmt(at, hour12)}</Text>
         </Box>
       </Box>
     )

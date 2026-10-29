@@ -29,7 +29,7 @@
       "name": "message-clock",
       "source": "./plugins/message-clock",
       "description": "Grok-style right-aligned clock on each sent prompt and each reply message",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "author": {
         "name": "weskao",
         "url": "https://github.com/weskao"
