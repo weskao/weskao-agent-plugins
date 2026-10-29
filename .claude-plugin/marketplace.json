@@ -12,7 +12,7 @@
       "name": "prompt-toc",
       "source": "./plugins/prompt-toc",
       "description": "Markdown-style TOC pane of your prompts and reply headings; press one to scroll there. Prompts-only chip, time per prompt, follow-viewport underline, settings (Open pane on start, Show time; both on by default), /compact divider, `/prompt-toc <keyword>` filter, `/prompt-toc-export [path]` Markdown export",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "author": {
         "name": "weskao",
         "url": "https://github.com/weskao"

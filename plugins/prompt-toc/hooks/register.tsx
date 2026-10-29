@@ -7,7 +7,7 @@ import { DEFAULTS, KEYS, LABELS, loadSettings, toggleSetting } from './settings'
 import type { Settings } from './settings'
 import { view } from './filter'
 import { short, toMarkdown } from './export'
-import { classify, commandEcho, headings, isEngineText, oneLine } from './shared/rows'
+import { classify, commandEcho, headings, isEngineText, MID_TURN, oneLine } from './shared/rows'
 import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
 import { cells, cellsOf, clamp, fit, isEdge, lastFirst, step, wrappedRows } from './window'
 
@@ -62,6 +62,11 @@ let flush: { cancel(): void } | undefined
 let indexedFor: string | undefined
 // the context fill session.measure last reported; a fall by more than half reads as a compaction
 let lastFill: number | undefined
+// what $.session.turns() last answered: it counts the user rows of the conversation in memory, so it only grows until a
+// /rewind (or a /compact) takes rows away; `rewound` holds the keys of the entries a fall's cut left, until the next turn ends
+// and its rescan drops those the transcript's new branch lacks
+let lastTurns: number | undefined
+let rewound: Set<string> | undefined
 // the pane's user settings (hydrated from $.store in session.start) and whether its section is unfolded
 const settings = atom({ plugin: 'prompt-toc', key: 'settings' } as const, DEFAULTS)
 const settingsOpen = atom({ plugin: 'prompt-toc', key: 'settingsOpen' } as const, false)
@@ -280,8 +285,9 @@ const sections = (text: string) => {
 // rebuilds the index from the session's transcript file (resume, reload, a mod enabled mid-session),
 // keeping rows appended while the scan ran; only the scanner reads the file, so a big transcript stays out of here.
 // The scan replaces everything indexed before it, so an entry an older rule let in never outlives a reload; only a
-// prompt's live time survives it (the transcript's time is for rows stored before this process).
-async function rescan($: EngineInterface, transcript?: string) {
+// prompt's live time survives it (the transcript's time is for rows stored before this process). `known`: the entries a
+// /rewind's cut left; one indexed since is the new branch's, kept as indexed though its row may not be in the file yet.
+async function rescan($: EngineInterface, transcript?: string, known?: Set<string>) {
   try {
     const sid = await $.session.id()
     // set before the scan, so the follow ticks during it, or a failed scan (no python3), never start another
@@ -314,9 +320,52 @@ async function rescan($: EngineInterface, transcript?: string) {
     await update($, entries, list => {
       // a prompt stamped live keeps that time, as message-clock keeps its own: one time per row in both mods
       const live = new Map(list.flatMap(x => (x.ts === undefined ? [] : [[keyOf(x), x.ts] as const])))
-      const timed = scanned.map(x => (live.has(keyOf(x)) ? { ...x, ts: live.get(keyOf(x)) } : x))
-      return settle([...timed, ...list.filter(x => !seen.has(keyOf(x)) && !before.has(keyOf(x)))])
+      const fresh = new Map(list.flatMap(x => (known && !known.has(keyOf(x)) ? [[keyOf(x), x] as const] : [])))
+      const timed = scanned.map(x => fresh.get(keyOf(x)) ?? (live.has(keyOf(x)) ? { ...x, ts: live.get(keyOf(x)) } : x))
+      return settle([...timed, ...list.filter(x => !seen.has(keyOf(x)) && (!before.has(keyOf(x)) || fresh.has(keyOf(x))))])
     })
+  } catch {}
+}
+
+// after a fall in turns: the main conversation's entries from the first prompt after the last one the conversation in
+// memory still holds (matched in order by label against its user rows) are dropped. A prompt no user row holds before a
+// later match stays: a slash command is a system row, never a user turn. Cut only where a prompt matched, or nothing is
+// left: a /compact keeps none of its prompts in memory, and its divider comes from a rescan.
+// shortcut: a subagent's list from a rewound turn stays (rescans read every agent file too); a slash command after the
+// last kept prompt goes with the rewound ones, until the turn's end rescans
+const cutRewound = (list: TocEntry[], said: string[]) => {
+  const divider = list.findLastIndex(x => !x.agent && x.divider)
+  let from = 0
+  let isAligned = said.length === 0
+  let cut: number | undefined
+  for (const [i, x] of list.entries()) {
+    if (i <= divider || x.agent || !isPromptEntry(x)) continue
+    const at = said.indexOf(x.text, from)
+    if (at < 0) {
+      cut ??= i
+      continue
+    }
+    from = at + 1
+    isAligned = true
+    cut = undefined
+  }
+  return isAligned && cut !== undefined ? list.filter((y, j) => y.agent || j < cut) : list
+}
+
+// /rewind raises no event and writes nothing to the transcript until the next row: notice it by turns() falling
+// perf: turns() is a count in the engine; the messages are read only on a fall
+async function checkRewind($: EngineInterface) {
+  try {
+    const turns = await $.session.turns()
+    const before = lastTurns
+    lastTurns = turns
+    if (before === undefined || turns >= before) return
+    const said = (await $.session.messages())
+      .filter(m => m.role === 'user' && !m.toolResults?.length)
+      // a mid-turn prompt's label is the person's words inside the engine's reminder, as classify reads it
+      .map(m => oneLine(MID_TURN.exec(m.text)?.[1] ?? commandEcho(m.text) ?? m.text, MAX_LABEL))
+    await update($, entries, list => cutRewound(list, said))
+    rewound = new Set((await read($, entries)).map(keyOf))
   } catch {}
 }
 
@@ -343,7 +392,12 @@ async function follow($: EngineInterface) {
   try {
     // rows of another session on screen (a /resume, a fork, a /clear whose SessionStart never reached this mod):
     // rebuild from the session now running, so the open pane needs no close and reopen
-    if ((await $.session.id().catch(() => indexedFor)) !== indexedFor) await rescan($)
+    if ((await $.session.id().catch(() => indexedFor)) !== indexedFor) {
+      // the old session's count is no baseline for this one: a smaller one is no rewind
+      lastTurns = undefined
+      await rescan($)
+    }
+    await checkRewind($)
     const list = (await read($, entries)).filter(x => !x.divider)
     const top = list.find(x => shown.has(x.id))
     // scrolled to the end, a short last exchange leaves an earlier row at the top: mark the bottom-most entry instead,
@@ -494,6 +548,8 @@ export const register: Register = (on, options) => {
     answered.clear()
     pending.clear()
     indexedFor = undefined
+    lastTurns = undefined
+    rewound = undefined
     // the pane stays open across session ends: /clear starts the index empty, /resume refills it (the first drawn row of the new session rescans)
     if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, entries, () => [])
@@ -531,7 +587,11 @@ export const register: Register = (on, options) => {
 
   // index typed prompts (level 0) and reply headings (level 1-3) or previews, keyed by row uuid = render requestId
   on('session.append', async ($, e, next) => {
+    // a typed prompt or command: a /rewind no row was drawn after shows here, before the new prompt counts
+    const isTurn = e.door === 'prompt' || e.door === 'command'
+    if (isTurn) await checkRewind($)
     const result = await next(e)
+    if (isTurn) lastTurns = await $.session.turns().catch(() => lastTurns)
     try {
       const row = classify(e)
       // a queued prompt is no row of the conversation yet: it is indexed once it is sent
@@ -584,6 +644,12 @@ export const register: Register = (on, options) => {
   // background agent's hand-back started, with no prompt row) never replace it; a rescan reads the same from stop_reason
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
+    // the first turn after a /rewind has written the new branch: rebuild from it (the live cut is by label only)
+    if (rewound && !e.agentId) {
+      const known = rewound
+      rewound = undefined
+      void rescan($, undefined, known)
+    }
     try {
       await update($, entries, list => {
         const last = list.findLast(x => x.agent === e.agentId)

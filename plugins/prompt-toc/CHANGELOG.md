@@ -2,6 +2,19 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.9.1 — 2026-10-29
+
+### Fixed
+
+- **`/rewind` (and Esc Esc) now removes the rewound prompts and headings from the pane.** A rewind raises
+  no event and writes nothing to the transcript until the next row, so the pane kept every entry. It now
+  notices the conversation's user-turn count falling, on the next row drawn or the next prompt, and drops
+  the main conversation's entries after the last prompt still in memory (a mid-turn prompt and a slash
+  command between kept prompts stay). The turn after a rewind rescans the transcript, keeping that turn's
+  rows the file does not hold yet, and the scanner now follows only the live branch (`parentUuid` back from
+  the last row, across `/compact` boundaries), so a `/resume` or reload no longer brings rewound rows back.
+  A subagent's list from a rewound turn stays.
+
 ## 0.9.0 — 2026-10-28
 
 ### Changed

@@ -37,6 +37,29 @@ class ScanTest(unittest.TestCase):
         del r["timestamp"]
         self.assertEqual(scan_rows([r]), [["u1", "prompt", "hi", ""]])
 
+    # /rewind appends nothing: the next prompt's parentUuid points back at the rewind point, the rewound rows stay in the file
+    def test_rows_a_rewind_left_behind_are_dropped(self):
+        out = scan_rows([
+            rec(uuid="u1", parentUuid=None, type="user", message={"content": "first"}),
+            rec(uuid="a1", parentUuid="u1", type="assistant", message={"content": [{"type": "text", "text": "ok"}]}),
+            rec(uuid="u2", parentUuid="a1", type="user", message={"content": "rewound"}),
+            rec(uuid="a2", parentUuid="u2", type="assistant", message={"content": [{"type": "text", "text": "gone"}]}),
+            # the active branch runs through a tool result, a line the scan otherwise skips
+            rec(uuid="t1", parentUuid="a1", type="user", message={"content": [{"type": "tool_result", "tool_use_id": "x", "content": "r"}]}),
+            rec(uuid="u3", parentUuid="t1", type="user", message={"content": "again"}),
+        ])
+        self.assertEqual([r[0] for r in out], ["u1", "a1", "u3"])
+
+    def test_rows_before_a_compact_boundary_stay_on_the_branch(self):
+        out = scan_rows([
+            rec(uuid="u1", parentUuid=None, type="user", message={"content": "old"}),
+            rec(uuid="a1", parentUuid="u1", type="assistant", message={"content": [{"type": "text", "text": "ok"}]}),
+            rec(uuid="b1", parentUuid=None, logicalParentUuid="a1", type="system", subtype="compact_boundary",
+                content="Conversation compacted", compactMetadata={"trigger": "manual"}),
+            rec(uuid="u2", parentUuid="b1", type="user", message={"content": "new"}),
+        ])
+        self.assertEqual([r[0] for r in out], ["u1", "a1", "b1", "u2"])
+
     def test_compact_boundary_row_and_summary_skipped(self):
         out = scan_rows([
             rec(uuid="s1", type="user", isCompactSummary=True, message={"content": "This session is being continued..."}),

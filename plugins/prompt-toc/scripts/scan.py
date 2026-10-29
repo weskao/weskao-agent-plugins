@@ -86,15 +86,43 @@ def rows(path: str, side: bool = False):
     yield from tokens(owner or prompt, usage)
 
 
+# the uuids on the conversation's live branch: from the file's last row back along parentUuid (logicalParentUuid across a
+# /compact boundary). A /rewind appends nothing; the next row's parent points back at the rewind point, so the rows it left
+# behind stay in the file off this branch. None = no row carries parentUuid (nothing to follow, keep every row).
+# shortcut: until the first row after a /rewind is written, the last row is still the rewound branch's; the live pane
+# prunes on its own (register.tsx, checkRewind)
+def branch(links: dict) -> set | None:
+    if not links:
+        return None
+    on, uuid = set(), next(reversed(links))
+    while uuid and uuid not in on:
+        on.add(uuid)
+        uuid = links.get(uuid)
+    return on
+
+
 def turns(path: str, side: bool):
+    links = {}
+    found = list(records(path, side, links))
+    on = branch(links)
+    return (row for row in found if on is None or row[0] in on)
+
+
+# every row turns() yields, in file order, filling links (uuid -> parent) from the main rows as it goes
+# perf: the branch needs the tool result lines' links, so those are parsed too (+0.5 s on a 130 MB transcript, 0.8 s before)
+def records(path: str, side: bool, links: dict):
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             # cheap prefilter: most lines are tool calls/results and progress records; a subagent's file is all sidechain
-            if ('"isSidechain":true' in line and not side) or '"tool_result"' in line:
+            if '"isSidechain":true' in line and not side:
                 continue
             try:
                 r = json.loads(line)
             except ValueError:
+                continue
+            if "parentUuid" in r and r.get("uuid") and not r.get("isSidechain"):
+                links[r["uuid"]] = r["parentUuid"] or r.get("logicalParentUuid")
+            if '"tool_result"' in line:
                 continue
             kind, uuid = r.get("type"), r.get("uuid")
             if not uuid or (r.get("isSidechain") and not side) or r.get("isMeta") or r.get("isCompactSummary"):

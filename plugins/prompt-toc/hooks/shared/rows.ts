@@ -41,7 +41,7 @@ const ENGINE_TAG = /^\s*<[a-z]+(?:-[a-z]+)+>/
 export const isEngineText = (text: string) => ENGINE_TAG.test(text) && commandEcho(text) === undefined
 
 // shortcut: a mid-turn message is only readable from the engine's reminder wording; update if that wording changes
-const MID_TURN = /while you were working:\n([\s\S]*?)\n\nThis is how/
+export const MID_TURN = /while you were working:\n([\s\S]*?)\n\nThis is how/
 
 // first match wins
 const RULES: readonly Rule[] = [
