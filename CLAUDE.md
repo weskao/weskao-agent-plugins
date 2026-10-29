@@ -5,6 +5,9 @@ version and `README.md` (users install one at a time).
 
 - **Never edit `plugins/<name>/`**: `stage` regenerates it from the source (`~/.claude/mods/<name>`,
   else `~/.claude/skills/<name>`). Testing needs only the source + `/reload-plugins`.
+- **External entries** (`agent-toggle`): a `git-subdir` source pointing at their own repo, no
+  `plugins/<name>/`, no `version` (their `plugin.json` holds it). Released there, so `release` skips them
+  and `stage` never touches them; edit the entry in `marketplace.json` by hand, then `make readme`.
 - **Release** (`make` lists targets; they wrap `~/.claude/skills/marketplace-publish/scripts/publish.py`,
   whose skill holds the SOP):
 

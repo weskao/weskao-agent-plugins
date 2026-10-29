@@ -25,7 +25,8 @@ Mods need Claude Code 2.1.287 or later.
 
 `agent-toggle` is released from [its own repo](https://github.com/weskao/agent-toggle), not staged
 here. The mod drives the `agent-toggle` CLI, so install that first (`uv tool install agent-toggle`);
-`/agent-toggle update` then updates the CLI and the mod together.
+`/agent-toggle update` then updates the CLI and the mod together. Install the mod from here or from
+`weskao/agent-toggle`'s own marketplace, not both.
 
 ## License
 

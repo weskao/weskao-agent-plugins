@@ -54,10 +54,12 @@
         "name": "weskao",
         "url": "https://github.com/weskao"
       },
+      "homepage": "https://github.com/weskao/agent-toggle",
       "license": "MIT",
       "keywords": [
         "mod",
         "pane",
+        "cli",
         "toggle"
       ]
     },
