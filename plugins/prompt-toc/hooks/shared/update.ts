@@ -24,6 +24,9 @@ export const cmpVersion = (a: string, b: string): number => {
 // an installed plugin lives under plugins/cache/<marketplace>/<name>/<version>
 export const isPublished = (root: string) => root.includes(`/${MARKETPLACE}/`)
 
+// a copy added from the claude.ai directory loads as <name>@synced from plugins/synced/; the directory updates it
+export const isSynced = (root: string) => root.includes('/synced/')
+
 // the newer upstream version, at most one fetch per TTL; undefined when current, unpublished, offline or unparsable
 export async function checkUpdate($: EngineInterface, now = Date.now(), root = $.plugin.root): Promise<string | undefined> {
   if (!isPublished(root)) return
@@ -50,6 +53,8 @@ export async function checkUpdate($: EngineInterface, now = Date.now(), root = $
 // /<name>-update: refresh the marketplace, then update this plugin; the new code loads after a restart
 export async function runUpdate($: EngineInterface, root = $.plugin.root): Promise<string> {
   const id = `${$.plugin.name}@${MARKETPLACE}`
+  // never suggest the marketplace install here: it would load a second copy that shadows the synced one
+  if (isSynced(root)) return `${$.plugin.name} came from the Claude directory, which updates it for you: restart Claude Code to load the newest version.`
   if (!isPublished(root)) return `${$.plugin.name} was not installed from ${MARKETPLACE}, so it has nothing to update from. To switch: claude plugin install ${id}`
   const out: string[] = []
   for (const argv of [['claude', 'plugin', 'marketplace', 'update', MARKETPLACE], ['claude', 'plugin', 'update', id]]) {

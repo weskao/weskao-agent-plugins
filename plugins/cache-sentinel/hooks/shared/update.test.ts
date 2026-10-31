@@ -90,3 +90,11 @@ test('runUpdate runs nothing for a copy not installed from the marketplace', asy
   expect(await runUpdate(f.$, '/home/u/.claude/mods/demo')).toContain('not installed from')
   expect(f.runs.length).toBe(0)
 })
+
+test('runUpdate points a copy from the claude.ai directory at the directory, never at a second install', async () => {
+  const f = fake()
+  const out = await runUpdate(f.$, '/home/u/.claude/plugins/synced/org_user/demo')
+  expect(out).toContain('Claude directory')
+  expect(out).not.toContain('claude plugin install')
+  expect(f.runs.length).toBe(0)
+})

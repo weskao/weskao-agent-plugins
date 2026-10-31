@@ -2,6 +2,12 @@
 
 All notable changes to message-clock. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.1 — 2026-11-01
+
+### Fixed
+
+- `/message-clock-update` in a copy added from the Claude directory now says the directory keeps it up to date, instead of suggesting a marketplace install that would load a second copy.
+
 ## 0.3.0 — 2026-10-29
 
 ### Added
