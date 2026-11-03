@@ -266,22 +266,6 @@ const marker = (entry: TocEntry, n: number) => {
 // `at` tells apart two headings of one reply with the same text
 const keyOf = (x: TocEntry) => (x.divider ? `${x.id}|divider` : `${x.id}|${x.level}|${x.at ?? ''}|${x.text}`)
 
-// the address of a reply's `at`-th heading section, drawn by the AssistantMessage hook below
-const sectionKey = (id: string, at: number) => `${PANE}:${id}:${at}`
-
-// a reply's markdown cut before each heading line outside fences: [text before the first heading, its sections...],
-// so section i + 1 starts at headings()[i]
-const sections = (text: string) => {
-  const out: string[][] = [[]]
-  let isFenced = false
-  for (const line of text.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) isFenced = !isFenced
-    else if (!isFenced && headings(line).length) out.push([])
-    out[out.length - 1]?.push(line)
-  }
-  return out.map(x => x.join('\n'))
-}
-
 // rebuilds the index from the session's transcript file (resume, reload, a mod enabled mid-session),
 // keeping rows appended while the scan ran; only the scanner reads the file, so a big transcript stays out of here.
 // The scan replaces everything indexed before it, so an entry an older rule let in never outlives a reload; only a
@@ -698,26 +682,6 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  // a reply with headings is drawn one engine block per heading section, each in a keyed Box, so a heading's entry
-  // scrolls to the heading itself, not to the reply's top
-  // shortcut: a plugin beneath that decorates each AssistantMessage drawing decorates each section; draw it whole if that shows
-  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    const parts = sections(e.props.text)
-    if (parts.length < 2 || (await isOff($))) return next(e)
-    const { Box } = $.ui.resolve(e)
-    const drawn = []
-    for (const [i, text] of parts.entries()) {
-      if (i === 0 && !text.trim()) continue
-      const block = await next({ ...e, props: { ...e.props, text, isFirstOfReply: e.props.isFirstOfReply && drawn.length === 0 } })
-      drawn.push(
-        <Box key={i > 0 ? sectionKey(e.requestId, i - 1) : undefined} flexDirection="column">
-          {block}
-        </Box>,
-      )
-    }
-    return <Box flexDirection="column">{drawn}</Box>
-  })
-
   // the pane draws its own window under a fixed toolbar: the person's wheel and scroll keys (and any $.ui.scroll on the
   // pane) move that window here, and with no `next` the engine's never moves, so the toolbar never scrolls away (a bar
   // pinned to `scroll.offset` lags a frame instead: the engine moves first, the hook is asked after, and rows flash
@@ -792,16 +756,14 @@ export const register: Register = (on, options) => {
     const isFolded = await read($, foldOld)
     const top = await read($, winTop)
 
-    // a row id scrolls the transcript to that row, or with `at` to that heading's section
-    const jump = async (to: string, pressed?: string, at?: number) => {
+    // a row id scrolls the transcript to that row. A heading lands on its reply's top: the engine finds a `{ key }` only in
+    // this mod's own pane and band, and moves the transcript by whole rows (`{ requestId }`), never to a line inside one
+    const jump = async (to: string, pressed?: string) => {
       try {
-        const target = at === undefined ? { requestId: to } : { key: sectionKey(to, at) }
         // scroll before any other await: a transcript row moves only while the call still answers the press
-        const scrolled = $.ui.scroll({ to: target, block: 'start' })
+        const scrolled = $.ui.scroll({ to: { requestId: to }, block: 'start' })
         if (pressed !== undefined) await update($, selected, () => pressed)
-        let { deny } = await scrolled
-        // a section not drawn as keyed (the reply's drawn text differs from the stored one): its reply's top
-        if (deny && at !== undefined) ({ deny } = await $.ui.scroll({ to: { requestId: to }, block: 'start' }))
+        const { deny } = await scrolled
         if (deny) $.ui.toast(`prompt-toc: ${deny}`)
       } catch (err) {
         $.ui.toast(`prompt-toc: ${String(err)}`)
@@ -982,7 +944,7 @@ export const register: Register = (on, options) => {
                 )}
               </Box>
               <Box flexGrow={1} flexShrink={1}>
-                <Button key={`toc-${i}`} plain onPress={() => (isOld ? $.ui.toast(OLD_ROW) : void jump(entry.id, keyOf(entry), entry.at))}>
+                <Button key={`toc-${i}`} plain onPress={() => (isOld ? $.ui.toast(OLD_ROW) : void jump(entry.id, keyOf(entry)))}>
                   <Text weight={isP || (entry.level === 1 && !entry.preview) ? 'bold' : 'regular'} dimColor={entry.level === 3 || entry.preview || isOld} underline={isFollowed} backgroundColor={bg}>
                     {entry.text}
                   </Text>

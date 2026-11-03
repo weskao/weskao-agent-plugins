@@ -171,12 +171,14 @@ test('with a small window the entries drawn never pass the rows left under the t
   }
 })
 
-// each heading's section is its own keyed block, the address a heading entry scrolls to
-test('draws a reply with headings one keyed section per heading', async ($, on) => {
+// the engine finds a scroll `{ key }` only in this mod's own pane and band, never inside a transcript row, so a reply
+// is not cut into keyed heading sections (that drew every reply once per heading for a jump that was always refused)
+test('draws a reply with headings whole, as the engine draws it', async ($, on) => {
   mock.session(on)
-  // stands for the engine's own drawing of each block
+  mock.clock(on)
+  // stands for the engine's own drawing
   on('ui.render', { component: 'AssistantMessage' }, ($, e) => ({ type: 'Text', children: [e.props.text] }) as never)
-  const text = 'intro\n\n## One\na\n```\n## not a heading\n```\n## Two\nb'
+  const text = 'intro\n\n## One\na\n## Two\nb'
   const ui = await $.ui.mount({
     plugin: 'prompt-toc',
     surface: 'terminal',
@@ -184,7 +186,5 @@ test('draws a reply with headings one keyed section per heading', async ($, on) 
     requestId: 'a1',
     props: { text, isFirstOfReply: true },
   } as never)
-  expect(await ui.find({ key: 'prompt-toc:a1:0' })).toBeDefined()
-  expect(await ui.find({ key: 'prompt-toc:a1:1' })).toBeDefined()
-  expect(await ui.find({ key: 'prompt-toc:a1:2' })).toBeUndefined()
+  expect(await ui.drawn()).toEqual({ type: 'Text', children: [text], part: { plugin: 'test' } } as never)
 })

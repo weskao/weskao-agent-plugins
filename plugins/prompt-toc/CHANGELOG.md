@@ -2,6 +2,21 @@
 
 All notable changes to prompt-toc. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.9.3 — 2026-11-03
+
+### Fixed
+
+- **Pressing a reply heading scrolls the transcript again: it lands on its reply's top, with no error toast.**
+  A heading press used to move nothing and only toast. Claude Code (checked on 2.1.317) looks up a
+  scroll `{ key }` only in a mod's own pane and band, and moves the transcript by whole rows only (`{ requestId }`,
+  no offset), so no mod can land on a heading inside a reply: the section's scroll was always refused (`no element
+  of its own is drawn under that key`). A heading press now sends the reply's scroll alone.
+
+### Removed
+
+- **Replies are no longer cut into keyed heading sections.** The cut drew every reply with headings once per
+  heading for a jump the engine never allowed; a reply is now drawn whole, as the engine draws it.
+
 ## 0.9.2 — 2026-11-01
 
 ### Fixed
