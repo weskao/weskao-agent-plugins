@@ -1,5 +1,5 @@
 // A rules.json (`$HOME/.claude/skill-step-progress/rules.json`) holding the flows that were once built in: /push,
-// /release, merge-into-main and the /orch:task|batch|goal state flows. Wrapped as a module because the plugin test sandbox imports only code files.
+// /release, merge-into-develop and the /orch:task|batch|goal state flows. Wrapped as a module because the plugin test sandbox imports only code files.
 const TESTS = String.raw`\b(?:pytest|vitest|jest|go test|flutter test|dart test|npm (?:run )?test|bun test|make test)\b`
 
 export default {
@@ -15,12 +15,12 @@ export default {
     doneAt: 4,
     commits: 'made',
   },
-  'merge-into-main': {
+  'merge-into-develop': {
     steps: ['Start merge', 'Resolve conflicts', 'Checks', 'Finish', 'Push', 'Report'],
     marks: [
-      { cmd: String.raw`merge_into_main\.py["']?\s+start\b`, step: 2, onError: true },
+      { cmd: String.raw`merge_into_develop\.py["']?\s+start\b`, step: 2, onError: true },
       { cmd: TESTS, step: 3 },
-      { cmd: String.raw`merge_into_main\.py["']?\s+finish\b`, step: 4 },
+      { cmd: String.raw`merge_into_develop\.py["']?\s+finish\b`, step: 4 },
       { cmd: String.raw`safe_push\.py`, step: 5, after: 4 },
     ],
     doneAt: 4,

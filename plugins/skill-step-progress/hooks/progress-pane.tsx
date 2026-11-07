@@ -172,7 +172,7 @@ async function scan($: EngineInterface, skills: string[]): Promise<Tracker[]> {
     const root = isListened(skill) ? own : base
     for (const repo of await dirs(`${root}/${skill}`)) {
       const dir = `${root}/${skill}/${repo.name}`
-      // the listener's state carries every title and the total; its .md's numbered list would add rows (merge-into-main lists 8)
+      // the listener's state carries every title and the total; its .md's numbered list would add rows (merge-into-develop lists 8)
       const outline = root === own ? { titles: {}, total: null } : await outlineFor($, skill, roots)
       let live = await readState($, `${dir}/current.json`)
       // a listener run no process follows (a crash, `--resume` or /reload-plugins mid-run) would stay live all session
@@ -752,7 +752,8 @@ export const register: Register = on => {
               {isOpen && (
                 <Box flexDirection="column" marginTop={1}>
                   {t.steps.map(s => stepRow(t, s, runMs))}
-                  {t.commits.map(c => commitRow(t, c))}
+                  {/* Tracker.commits is oldest first; the pane lists newest first */}
+                  {t.commits.toReversed().map(c => commitRow(t, c))}
                 </Box>
               )}
               <Box flexDirection="row" gap={2} marginTop={isOpen ? 1 : 0}>

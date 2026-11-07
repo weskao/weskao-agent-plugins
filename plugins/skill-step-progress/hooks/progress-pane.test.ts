@@ -33,7 +33,7 @@ const STATE: Record<string, string> = {
   }),
   [`${BASE}/sop-a/repo/history/0.9.0.json`]: JSON.stringify({ status: 'completed', version: '0.9.0', total_steps: 3, steps: {} }),
 }
-// /push and merge-into-main are listener flows only through the rules file
+// /push and merge-into-develop are listener flows only through the rules file
 STATE['/home/u/.claude/skill-step-progress/rules.json'] = JSON.stringify(RULES)
 const LIST: Record<string, unknown[]> = {
   [`${BASE}/sop-c/repo/history`]: [
@@ -186,7 +186,7 @@ test('invoking a SOP with a run in progress reopens the pane; Bash state writes 
   await clock.settle()
   await $.command.run({ command: 'progress', args: 'close' } as never)
   await $.tool.call({ tool: 'Bash', command: `F="$HOME/.claude/usage-data/sop-a/repo/current.json"; jq '.x = 1' "$F" > "$T" && mv "$T" "$F"` } as never)
-  // /commit, /push, /release and merge-into-main do open it (step-listener.test.ts); /review is no tracked flow
+  // /commit, /push, /release and merge-into-develop do open it (step-listener.test.ts); /review is no tracked flow
   await $.prompt.submit({ text: '/review', command: { name: 'review', args: '' } } as never)
   await clock.settle()
   expect(paneCalls.at(-1)).toBe('close')
@@ -514,7 +514,7 @@ test("the empty pane lists this computer's tracked flows from its rules file, an
 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
   const ui = await $.ui.mount({ ...pane, props })
-  expect(await ui.find({ text: /^Tracked on this computer: \/commit, \/push, \/release, \/merge-into-main, \/orch:task, \/orch:batch, \/orch:goal$/ })).toBeDefined()
+  expect(await ui.find({ text: /^Tracked on this computer: \/commit, \/push, \/release, \/merge-into-develop, \/orch:task, \/orch:batch, \/orch:goal$/ })).toBeDefined()
   expect(await ui.find({ text: /Rules above, or ask Claude/ })).toBeDefined()
   expect(commands[0]?.description).toMatch(/\/commit/)
   expect(commands[0]?.description).not.toMatch(/orch/)
@@ -613,6 +613,9 @@ test('a run with commits lists them under its last step: hash, colored type pref
   expect(await color(/^feat\(pane\):$/)).toBe('success')
   expect(await ui.find({ text: 'list commits' })).toBeDefined()
   expect(await ui.find({ text: 'plain subject' })).toBeDefined()
+  // the saved list is oldest first; the pane shows the newest on top
+  expect(await ui.find({ text: /bbb2222.*aaa1111/s })).toBeDefined()
+  expect(await ui.find({ text: /aaa1111.*bbb2222/s })).toBeUndefined()
 })
 
 test('/commit and /push show only this session\'s runs from the temp folder, not usage-data or older runs', async ($, on) => {
@@ -962,18 +965,18 @@ test('/progress history with nothing finished says so', async ($, on) => {
 })
 
 test('a listener flow takes its rows from the state alone: a numbered list in its .md adds no steps', async ($, on) => {
-  // merge-into-main's SKILL.md numbers eight list items; the listener writes six steps
-  STATE['/repo/.claude/skills/merge-into-main/SKILL.md'] = '1. **start.**\n2. **Conflicts.**\n7. **Push**\n8. **Report**\n'
-  STATE[`${OWN}/merge-into-main/repo/current.json`] = JSON.stringify({
+  // merge-into-develop's SKILL.md numbers eight list items; the listener writes six steps
+  STATE['/repo/.claude/skills/merge-into-develop/SKILL.md'] = '1. **start.**\n2. **Conflicts.**\n7. **Push**\n8. **Report**\n'
+  STATE[`${OWN}/merge-into-develop/repo/current.json`] = JSON.stringify({
     status: 'in_progress', current_step: '1', total_steps: 2, step_order: ['1', '2'],
     steps: { '1': { status: 'in_progress', title: 'Start merge' }, '2': { status: 'pending', title: 'Resolve conflicts' } },
   })
-  LIST[`${OWN}/merge-into-main`] = [{ name: 'repo', kind: 'dir' }]
+  LIST[`${OWN}/merge-into-develop`] = [{ name: 'repo', kind: 'dir' }]
   fakeHost(on, {})
   const clock = mock.clock(on)
 
   const ui = await $.ui.mount({ ...pane, props })
-  await $.skill.prompt({ skill: 'merge-into-main', text: 'go' })
+  await $.skill.prompt({ skill: 'merge-into-develop', text: 'go' })
   await clock.settle()
   expect(await ui.find({ text: 'Resolve conflicts' })).toBeDefined()
   expect(await ui.find({ text: /0\/6/ })).toBeDefined()

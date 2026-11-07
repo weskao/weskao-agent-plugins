@@ -14,7 +14,7 @@ type Mark = {
   step: number
   /** only once the run reached this step (`git log` counts as Verify after a commit, not while surveying) */
   after?: number
-  /** matched after the command ran, and only when it failed (merge-into-main's `start` exits 4 on conflicts) */
+  /** matched after the command ran, and only when it failed (merge-into-develop's `start` exits 4 on conflicts) */
   onError?: boolean
 }
 export type Rule = {
@@ -229,7 +229,7 @@ type Run = {
   idle: number
 }
 // A flow waiting across turns may sit out one turn (the user answering its question); a second without any of its
-// commands means it stopped (a /merge-into-main with nothing to merge), so it is not shown in progress for good
+// commands means it stopped (a /merge-into-develop with nothing to merge), so it is not shown in progress for good
 const IDLE_TURNS = 2
 // one run per flow and loop: /commit typed while /release waits for its intro keeps both, each in its own pane box, and a
 // sub-agent's /commit is another box beside the main one. Saved to $.state after each change (`save`), so the module a
@@ -467,7 +467,7 @@ async function advance($: EngineInterface, run: Run, to: number) {
 // wraps progress-pane.tsx's Bash hook: the engine allows one hook per event in a mod. `agentId`: the loop that runs the
 // command; only that loop's runs take it as a step.
 export async function trackBash<R extends { isError?: boolean }>($: EngineInterface, command: string, agentId: string | undefined, run: () => Promise<R>): Promise<R> {
-  // every run the command is a step of (a safe_push.py is /push's step and merge-into-main's alike)
+  // every run the command is a step of (a safe_push.py is /push's step and merge-into-develop's alike)
   const seen = [...runs.values()]
     .filter(cur => cur.agentId === agentId)
     .map(cur => ({ cur, kind: cur.rule.commits, hits: cur.rule.marks.filter(m => m.cmd.test(command)) }))

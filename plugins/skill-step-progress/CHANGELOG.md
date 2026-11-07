@@ -2,6 +2,12 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.2 — 2026-11-07
+
+### Changed
+
+- **A run's commits are now listed newest first.** The latest commit sits at the top under the last step, and older ones follow below it.
+
 ## 0.5.1 — 2026-11-01
 
 ### Fixed

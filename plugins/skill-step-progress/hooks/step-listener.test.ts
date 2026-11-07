@@ -3,7 +3,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import RULES from './fixtures/rules'
 
-const MERGE = '$HOME/.claude/skills/merge-into-main/scripts/merge_into_main.py'
+const MERGE = '$HOME/.claude/skills/merge-into-develop/scripts/merge_into_develop.py'
 const RULES_FILE = '/home/u/.claude/skill-step-progress/rules.json'
 
 type State = { status: string; note?: string; step_order: string[]; steps: Record<string, { status: string; title: string }>; commits?: { hash: string; subject: string }[] }
@@ -328,12 +328,12 @@ test('a run an earlier process left in progress is archived as abandoned when th
   expect(calls).toEqual(['commit archive --status abandoned', 'commit init --steps Survey|Group batches|Commit batches|Verify|Summary'])
 })
 
-test('with no rules file only /commit is tracked: /push and merge-into-main are left alone', async ($, on) => {
+test('with no rules file only /commit is tracked: /push and merge-into-develop are left alone', async ($, on) => {
   const { calls, opens } = fakeHost(on, undefined, undefined, undefined, {})
   const clock = mock.clock(on)
 
   await $.prompt.submit(slash('push'))
-  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-develop' } as never)
   await clock.settle()
   await $.tool.call(bash('python3 safe_push.py'))
   await $.turn.complete(turn())
@@ -571,11 +571,11 @@ test('/push lists the commits it sent, counted before the push and read back fro
   expect(calls).toEqual(['push init --steps Safe push|Summary', 'push commits ccc3333 fix: a ddd4444 feat: b', 'push archive --status completed'])
 })
 
-test('merge-into-main: conflicts on start move to Resolve; the run waits across turns until Finish', async ($, on) => {
+test('merge-into-develop: conflicts on start move to Resolve; the run waits across turns until Finish', async ($, on) => {
   const { calls } = fakeHost(on, cmd => / start\b/.test(cmd))
   const clock = mock.clock(on)
 
-  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-develop' } as never)
   await clock.settle()
   await $.tool.call(bash(`python3 "${MERGE}" start feat/x`))
   // the user reviews the conflict summary in between: the run stays open
@@ -586,37 +586,37 @@ test('merge-into-main: conflicts on start move to Resolve; the run waits across 
   await clock.settle()
 
   expect(calls.slice(1)).toEqual([
-    'merge-into-main step 1 done',
-    'merge-into-main step 2 in_progress',
-    'merge-into-main step 2 done',
-    'merge-into-main step 3 in_progress',
-    'merge-into-main step 3 done',
-    'merge-into-main step 4 in_progress',
-    'merge-into-main archive --status completed',
+    'merge-into-develop step 1 done',
+    'merge-into-develop step 2 in_progress',
+    'merge-into-develop step 2 done',
+    'merge-into-develop step 3 in_progress',
+    'merge-into-develop step 3 done',
+    'merge-into-develop step 4 in_progress',
+    'merge-into-develop archive --status completed',
   ])
 })
 
-// Seen live: /merge-into-main invoked with nothing to merge, so none of its commands ran; it sat at Start merge for good
+// Seen live: /merge-into-develop invoked with nothing to merge, so none of its commands ran; it sat at Start merge for good
 test('a waiting flow none of whose commands ran for two turns ends as abandoned, with a toast', async ($, on) => {
   const { calls, toasts } = fakeHost(on)
   const clock = mock.clock(on)
 
-  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-develop' } as never)
   await clock.settle()
   await $.turn.complete(turn())
   await $.tool.call(bash('git status'))
   await $.turn.complete(turn())
   await clock.settle()
 
-  expect(calls.slice(1)).toEqual(['merge-into-main archive --status abandoned --note idle at Start merge'])
-  expect(toasts).toEqual(['/merge-into-main abandoned: idle at Start merge'])
+  expect(calls.slice(1)).toEqual(['merge-into-develop archive --status abandoned --note idle at Start merge'])
+  expect(toasts).toEqual(['/merge-into-develop abandoned: idle at Start merge'])
 })
 
 test('one turn without the flow\'s commands (the user asking about the conflicts) keeps it open', async ($, on) => {
   const { calls } = fakeHost(on, cmd => / start\b/.test(cmd))
   const clock = mock.clock(on)
 
-  await $.tool.call({ tool: 'Skill', skill: 'merge-into-main' } as never)
+  await $.tool.call({ tool: 'Skill', skill: 'merge-into-develop' } as never)
   await clock.settle()
   await $.tool.call(bash(`python3 "${MERGE}" start feat/x`))
   await $.turn.complete(turn())
@@ -628,7 +628,7 @@ test('one turn without the flow\'s commands (the user asking about the conflicts
   await $.turn.complete(turn())
   await clock.settle()
 
-  expect(calls.filter(c => c.includes('archive'))).toEqual(['merge-into-main archive --status completed'])
+  expect(calls.filter(c => c.includes('archive'))).toEqual(['merge-into-develop archive --status completed'])
 })
 
 test('commands outside the rules are left alone', async ($, on) => {
