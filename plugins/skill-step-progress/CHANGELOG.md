@@ -2,6 +2,12 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.0 — 2026-11-09
+
+### Added
+
+- **Ad-hoc SOPs.** When you lay out a procedure of a few Bash-run steps in the chat that no flow covers, Claude asks whether to show it in the Progress pane for this run only (recommended), show it and save it as a flow, or leave it. The run-only choice uses the `rules` tool's new `run` action: checked like `set`, tracked until the run ends, never written to `rules.json`. The ask rides the `pane` tool's description, which the model reads every turn.
+
 ## 0.5.2 — 2026-11-07
 
 ### Changed

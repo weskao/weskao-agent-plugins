@@ -153,6 +153,9 @@ let states: Record<string, StateFlow> = {}
 // undefined until first read; null when missing
 let rulesText: string | null | undefined
 let rulesFile: Record<string, unknown> | string = {}
+// Flows for this session only (the rules tool's `run`): an ad-hoc SOP drawn from the conversation, tracked for one run
+// and never written to the file. Module state, so a /reload-plugins mid-run ends that run as abandoned, like an edit.
+const adhoc: Record<string, Rule> = {}
 
 // The file as an object ({} when missing or empty), or why it is not one: a file that is not a JSON object is someone's
 // hand edit in progress, so its flows are skipped and rules-edit.ts refuses to write over it.
@@ -178,15 +181,37 @@ export async function loadRules($: EngineInterface): Promise<Record<string, unkn
   if (text === rulesText) return rulesFile
   rulesText = text
   rulesFile = parseRules(path, text)
+  merge()
+  return rulesFile
+}
+
+// the flows in force: built-in, then the file's, then this session's ad-hoc ones (named like a saved one, the ad-hoc wins)
+function merge() {
   const added = Object.entries(typeof rulesFile === 'string' ? {} : rulesFile)
     .map(([name, v]): [string, Flow | string] => [name, toFlow(name, v)])
     .filter((e): e is [string, Flow] => typeof e[1] !== 'string')
   // fromEntries defines own keys, so a `__proto__` entry stays a plain (unused) name
   // merged before the paused ones drop out, so a paused entry also hides the built-in it replaces
   const merged = Object.entries(Object.fromEntries([...Object.entries(BUILTIN), ...added])).filter(([, f]) => !f.off)
-  rules = Object.fromEntries(merged.filter((e): e is [string, Rule] => !isState(e[1])))
+  rules = Object.fromEntries([...merged.filter((e): e is [string, Rule] => !isState(e[1])), ...Object.entries(adhoc)])
   states = Object.fromEntries(merged.filter((e): e is [string, StateFlow] => isState(e[1])))
-  return rulesFile
+}
+
+/** the rules tool's `run`: tracks `value` as the flow `name` from this session's next /name run, which takes it with it */
+export function addAdhoc(name: string, value: unknown): Rule | string {
+  const r = toFlow(name, value)
+  if (typeof r === 'string') return r
+  if (isState(r)) return 'run takes a watched flow (steps and marks), not a state flow'
+  if (runs.has(name)) return `/${name} is already running`
+  adhoc[name] = r
+  merge()
+  return r
+}
+export const isAdhoc = (name: string) => Object.hasOwn(adhoc, name)
+function dropAdhoc(name: string) {
+  if (!isAdhoc(name)) return
+  delete adhoc[name]
+  merge()
 }
 
 // For hooks that need the flows without a skill start having loaded them (a Bash call right after a reload)
@@ -396,6 +421,7 @@ export function abandon($: EngineInterface, dir: string) {
 // progress-pane.tsx's session.end calls this: /clear and /resume change the session id, so the folder these runs write to
 export function reset($: EngineInterface) {
   runs.clear()
+  for (const name of Object.keys(adhoc)) dropAdhoc(name)
   repo = null
   running = undefined
   return save($)
@@ -532,6 +558,7 @@ export function listen(on: On) {
       if (note) $.ui.toast(`/${run.skill}${run.agentId === undefined ? '' : ' (sub-agent)'} ${status}: ${note}`)
       // kept until archived: the pane's scan takes an in-progress run nobody follows for a leftover
       runs.delete(run.key)
+      if (run.agentId === undefined) dropAdhoc(run.skill)
     }
     if (live.length > 0) await save($)
     if (e.agentId === undefined && running === e.turnId) running = undefined

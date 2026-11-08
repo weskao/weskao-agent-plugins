@@ -5,8 +5,9 @@ import type { Commit, RuleRow, Step, StepStatus, Tracker } from '../types'
 import { buildTracker, fitText, parseOutline, textWidth } from './state-file'
 import type { Outline } from './state-file'
 import { listRules, pauseRule, removeRule, rowText, RULES_TOOL, runAction } from './rules-edit'
+import type { RuleInput } from './rules-edit'
 import { notifyUpdate, registerUpdate, runUpdate } from './shared/update'
-import { abandon, claudeDir, ensureRules, followed, homeDir, isListened, listen, loadRules, PANE, reset, restore, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
+import { abandon, claudeDir, ensureRules, followed, homeDir, isAdhoc, isListened, listen, loadRules, PANE, reset, restore, runningTurn, sessionBase, startRun, stateFolder, sweep, TITLE, trackBash, writtenState } from './step-listener'
 
 const trackers = atom({ plugin: 'skill-step-progress', key: 'trackers' } as const, [])
 // each run's open/closed state as toggled by its header; a run never toggled is open only when it is the first
@@ -21,6 +22,13 @@ const confirming = atom({ plugin: 'skill-step-progress', key: 'confirming' } as 
 // /progress-open and /progress-close: tracking and the pane off for good (kept across sessions in $.store), like prompt-toc's
 const OFF = { plugin: 'skill-step-progress', key: 'isOff' } as const
 const OFF_NOTE = 'Progress is off (/progress-open to turn it on).'
+// Carried by the pane tool, which every turn's tool list shows: a `prompt.compose` section never reaches the model here,
+// as Claude Code's built-in cc-plugin-sec-default sends that event past user-installed mods (seen 2.1.319).
+const ASK_ADHOC =
+  ' Also: when the person lays out a procedure of 3 or more steps run through Bash commands (tests, build, deploy, …) that is not a /skill run and that no tracked flow covers, ask once with AskUserQuestion before the first step: ' +
+  '1. show it in the Progress pane for this run only (Recommended); 2. show it and save it as a flow for later runs; 3. do not track it. ' +
+  `For 1 or 2 load the rules tool (ToolSearch select:mcp__${PANE}__rules), name the flow with a short slug, draft { steps, marks, doneAt } from the commands, test one, then run (1) or set then run (2). ` +
+  'Not for a single command or a procedure already tracked.'
 async function isOff($: EngineInterface) {
   return (await $.state.get(OFF)).value === true
 }
@@ -413,7 +421,7 @@ export const register: Register = on => {
       await $.tool.register(RULES_TOOL as never)
       await $.tool.register({
         name: 'pane',
-        description: "Open or close the Progress pane (this session's skill step progress) when the person asks to show or hide it.",
+        description: "Open or close the Progress pane (this session's skill step progress) when the person asks to show or hide it." + ASK_ADHOC,
         inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['open', 'close'] } }, required: ['action'] },
         isDeferred: false,
       })
@@ -517,7 +525,11 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: `mcp__${PANE}__${RULES_TOOL.name}` }, async ($, e) => {
-    const result = await runAction($, e as never)
+    const input = e as RuleInput
+    if (input.action === 'run' && (await isOff($))) return { result: OFF_NOTE }
+    const result = await runAction($, input)
+    // an ad-hoc flow starts here, not from a typed /name: entered puts it in this session's list, so the pane shows it
+    if (input.action === 'run' && isAdhoc(input.name ?? '')) await entered($, input.name!)
     await refreshRules($)
     return { result }
   })

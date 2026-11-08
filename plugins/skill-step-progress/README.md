@@ -51,9 +51,11 @@ When a newer version is published, a toast says so at session start (checked at 
 
 You don't need to edit any file by hand:
 
-- **Ask Claude**, e.g. "track the steps of /deploy". Claude reads the skill, drafts its steps and the commands that start each one, checks a few real commands against the draft, and saves it. A flow that doesn't pass the check is never saved, and Claude is told why. This goes through the mod's `rules` tool (`list`, `get`, `set`, `remove`, `pause`, `resume`, `test`), which loads only when needed.
+- **Ask Claude**, e.g. "track the steps of /deploy". Claude reads the skill, drafts its steps and the commands that start each one, checks a few real commands against the draft, and saves it. A flow that doesn't pass the check is never saved, and Claude is told why. This goes through the mod's `rules` tool (`list`, `get`, `set`, `remove`, `pause`, `resume`, `test`, `run`), which loads only when needed.
 - **The pane's Rules view** (`◉ Rules` at the top of the pane) lists every flow with the reason any entry is skipped. Pause or Resume takes one press; Remove asks you to confirm.
 - **`/progress rules`** lists the flows in the chat and opens the Rules view. `/progress rules show|pause|resume|remove <name>` does the rest. The built-in `/commit` can be paused but not removed.
+
+**An ad-hoc SOP, without saving it.** When you lay out a procedure of a few steps in the chat (run the tests, build, deploy) that no flow covers, Claude asks before starting: show it in the pane for this run only (recommended), show it and save it as a flow, or leave it alone. The run-only choice goes through the `rules` tool's `run` action: the steps are checked and tracked like any flow, gone once the run ends, and never written to `rules.json`. Claude is told to ask by the description of the mod's `pane` tool, which it reads every turn.
 
 All three keep your flows in `~/.claude/skill-step-progress/rules.json` (on Windows, `%USERPROFILE%\.claude\skill-step-progress\rules.json`; with `CLAUDE_CONFIG_DIR` set, `$CLAUDE_CONFIG_DIR/skill-step-progress/rules.json`). The file is yours and never ships with the mod, so every user and machine keeps its own. Each key is a skill or command name; an entry named `commit` replaces the built-in one, and `"off": true` pauses an entry. The file is re-read each time a skill starts and after each edit. To edit it by hand, use the format below.
 

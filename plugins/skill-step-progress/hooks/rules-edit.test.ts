@@ -60,6 +60,8 @@ test('session start registers the rules tool (deferred), the pane tool and a /pr
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
 
   expect(tools.map(t => [t.name, t.isDeferred])).toEqual([['rules', true], ['pane', false]])
+  // the always-listed pane tool carries the ask for an ad-hoc SOP (a prompt.compose section never reaches the model)
+  expect((tools[1] as { description?: string }).description).toMatch(/ask once with AskUserQuestion.*this run only \(Recommended\).*run \(1\) or set then run \(2\)/)
   expect(commands[0]?.argumentHint).toMatch(/rules/)
   expect(commands[0]?.argumentHint).toMatch(/e\.g\. \/progress rules/)
 })
@@ -172,6 +174,20 @@ test('a state flow saves, lists where its state is read, and tests its writer', 
   expect(await call($ as never, { action: 'list' })).toMatch(/orch:task · rules file · state in usage-data\/orch-task/)
   expect(await call($ as never, { action: 'test', name: 'orch:task', command: 'python3 orch-progress.py task step 1 done' })).toMatch(/marks orch:task as run/)
   expect(await call($ as never, { action: 'test', name: 'orch:task', command: 'cat orch-progress.py' })).toMatch(/matches no writer/)
+})
+
+test('run tracks an ad-hoc flow for this run only: nothing written, not listed, refused while running or for a state flow', async ($, on) => {
+  const { files, clock } = fakeHost(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+
+  expect(await call($ as never, { action: 'run', name: 'hotfix', rule: DEPLOY })).toMatch(/^Tracking \/hotfix \(3 steps\) in the Progress pane for this run only/)
+  await clock.settle()
+  expect(Object.keys(files).some(k => k.startsWith('/tmp/skill-step-progress/sess-1/hotfix/'))).toBe(true)
+  expect(files[FILE]).toBeUndefined()
+  expect(await call($ as never, { action: 'list' })).not.toMatch(/hotfix/)
+  expect(await call($ as never, { action: 'run', name: 'hotfix', rule: DEPLOY })).toMatch(/^Not started: \/hotfix is already running/)
+  expect(await call($ as never, { action: 'run', name: 'x:y', rule: { state: 'x-y' } })).toMatch(/^Not started: run takes a watched flow/)
+  expect(await call($ as never, { action: 'run', name: 'bad', rule: { ...DEPLOY, doneAt: 9 } })).toMatch(/^Not started: doneAt must be/)
 })
 
 test('remove drops a file flow; the built-in /commit can only be paused', async ($, on) => {

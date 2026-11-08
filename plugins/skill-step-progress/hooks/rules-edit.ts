@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import { BUILTIN, flowJson, isState, loadRules, rulesPath, toFlow } from './step-listener'
+import { addAdhoc, BUILTIN, flowJson, isState, loadRules, rulesPath, toFlow } from './step-listener'
 import type { RuleRow } from '../types'
 import type { Flow } from './step-listener'
 
@@ -13,7 +13,7 @@ export type RuleInput = { action?: string; name?: string; rule?: unknown; comman
 type File = Record<string, unknown>
 
 const isBuiltin = (name: string) => Object.hasOwn(BUILTIN, name)
-const ACTIONS = ['list', 'get', 'set', 'remove', 'pause', 'resume', 'test']
+const ACTIONS = ['list', 'get', 'set', 'remove', 'pause', 'resume', 'test', 'run']
 
 // The file as an object ({} when missing or empty), or why it cannot be edited: a file that is not a JSON object is
 // someone's hand edit in progress, and writing over it would lose that. Read fresh, parsed by the listener's loadRules
@@ -136,6 +136,13 @@ async function testRule($: EngineInterface, name: string, command: string, draft
   return draft === undefined ? withFile($, '', file => explain(lookup(file, name))) : explain(toFlow(name, draft))
 }
 
+// Checked like set, written nowhere: an ad-hoc SOP the person chose to see in the pane for this run only. The pane
+// module starts the run (progress-pane.tsx's `entered`), so it lands in this session's list like a typed /name.
+function runOnce(name: string, value: unknown) {
+  const r = addAdhoc(name, value)
+  return typeof r === 'string' ? `Not started: ${r}.` : `Tracking /${name} (${r.steps.length} steps) in the Progress pane for this run only; set saves it for later runs.`
+}
+
 // The model's tool and `/progress rules <verb> <name>` alike; every action but list needs a name, test a command too
 export async function runAction($: EngineInterface, input: RuleInput): Promise<string> {
   const { action, name = '', command = '' } = input
@@ -144,6 +151,7 @@ export async function runAction($: EngineInterface, input: RuleInput): Promise<s
   if (!name) return `${action} needs a name.`
   if (action === 'get') return getRule($, name)
   if (action === 'set') return setRule($, name, input.rule)
+  if (action === 'run') return runOnce(name, input.rule)
   if (action === 'remove') return removeRule($, name)
   if (action === 'test') return command ? testRule($, name, command, input.rule) : 'test needs a command.'
   return pauseRule($, name, action === 'pause')
@@ -156,7 +164,8 @@ export const RULES_TOOL = {
     "Read and edit the flows skill-step-progress tracks: a watched flow (the Progress pane's steps for a skill, moved by the Bash commands it runs) " +
     'or a state flow (a skill that writes its own progress state). ' +
     'Actions: list; get <name>; set <name> + rule (checked first, never saved when invalid: the reply says why); remove <name>; ' +
-    'pause/resume <name>; test <name> + command (which step that command starts; pass rule to test a draft before saving). ' +
+    'pause/resume <name>; test <name> + command (which step that command starts; pass rule to test a draft before saving); ' +
+    'run <name> + rule (an ad-hoc SOP from the conversation: checked like set, tracked in the pane from now for this one run, never saved; set then run tracks it now and keeps it). ' +
     'A rule: { steps: string[] (titles; the run starts on step 1), marks: [{ cmd: regex source matching a Bash command, step: 1-based, ' +
     'after?: only once this step is reached, onError?: only when the command fails }], doneAt: a turn ending at or past this step completes the run, ' +
     'oneTurn?: the flow never spans turns, commits?: "made" (list commits since the start) | "pushed" (what a matched push sent) }. ' +
@@ -168,7 +177,7 @@ export const RULES_TOOL = {
     properties: {
       action: { type: 'string', enum: ACTIONS },
       name: { type: 'string', description: 'skill or command name, without the slash' },
-      rule: { type: 'object', description: 'the flow, for set (or a draft for test)' },
+      rule: { type: 'object', description: 'the flow, for set and run (or a draft for test)' },
       command: { type: 'string', description: 'a Bash command, for test' },
     },
     required: ['action'],
