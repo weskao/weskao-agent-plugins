@@ -1076,3 +1076,75 @@ test('session start registers /skill-step-progress-update, and the command answe
   expect(commands.map(c => c.name)).toContain('skill-step-progress-update')
   expect((await $.command.run({ command: 'skill-step-progress-update', args: '' } as never)).text).toMatch(/weskao-agent-plugins/)
 })
+
+// ⚙ Settings: "Ask to track ad-hoc SOPs" shapes the pane tool's description, the one the model reads every turn
+const ASK = /ask once with AskUserQuestion/
+function settingsHost(on: On) {
+  fakeHost(on, {})
+  const clock = mock.clock(on)
+  const panes: string[] = []
+  on('tool.register', async ($, e) => {
+    if ((e as { name: string }).name === 'pane') panes.push((e as { description: string }).description)
+    return { value: undefined } as never
+  })
+  const sets: Record<string, unknown> = {}
+  on('config.set', async ($, e) => ((sets[(e as { key: string }).key] = (e as { value: unknown }).value), { value: (e as { value: unknown }).value }) as never)
+  return { clock, panes, sets }
+}
+
+test('the ad-hoc ask is on by default; the popover turns it off and on, re-registering the pane tool and mirroring /config', async ($, on) => {
+  const { clock, panes, sets } = settingsHost(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  await clock.settle()
+  expect(panes.at(-1)).toMatch(ASK)
+
+  const ui = await $.ui.mount({ ...pane, props })
+  expect(await ui.find({ type: 'Button', text: /Ask to track/ })).toBeUndefined()
+  await ui.press({ key: 'settings-toggle' })
+  expect(await ui.find({ type: 'Button', text: /\[x\] Ask to track ad-hoc SOPs/ })).toBeDefined()
+
+  await ui.press({ key: 'setting-askAdhoc' })
+  expect(await ui.find({ type: 'Button', text: /\[ \] Ask to track ad-hoc SOPs/ })).toBeDefined()
+  expect(panes.at(-1)).not.toMatch(ASK)
+  expect(panes.at(-1)).toMatch(/^Open or close the Progress pane/)
+  expect(sets['skill-step-progress.askAdhoc']).toBe(false)
+
+  await ui.press({ key: 'setting-askAdhoc' })
+  expect(panes.at(-1)).toMatch(ASK)
+  expect(sets['skill-step-progress.askAdhoc']).toBe(true)
+})
+
+test('an askAdhoc=false option is read at session start: the pane tool carries no ad-hoc ask', { options: { askAdhoc: false } }, async ($, on) => {
+  const { clock, panes } = settingsHost(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  await clock.settle()
+  expect(panes.at(-1)).toMatch(/^Open or close the Progress pane/)
+  expect(panes.at(-1)).not.toMatch(ASK)
+  const ui = await $.ui.mount({ ...pane, props })
+  await ui.press({ key: 'settings-toggle' })
+  expect(await ui.find({ type: 'Button', text: /\[ \] Ask to track ad-hoc SOPs/ })).toBeDefined()
+})
+
+test('the settings popover closes on another press, a blank-cell click, and the pane losing focus', async ($, on) => {
+  const { clock } = settingsHost(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never)
+  const ui = await $.ui.mount({ ...pane, props })
+  const isOpen = async () => (await ui.find({ type: 'Button', text: /Ask to track/ })) !== undefined
+
+  await ui.press({ key: 'settings-toggle' })
+  await ui.press({ key: 'view-rules' })
+  expect(await isOpen()).toBe(false)
+
+  await ui.press({ key: 'settings-toggle' })
+  expect((await ui.find({ key: 'settings-backdrop' }))?.props).toMatchObject({ width: 60 })
+  await ui.pointer({ type: 'down', x: 3, y: 2, button: 'left', in: 'settings-backdrop' })
+  expect(await isOpen()).toBe(false)
+
+  const focused = (isFocused: boolean) => ({ title: 'Progress', isFocused, bodyColumns: 60, placement: 'dock' }) as never
+  await ui.redraw(focused(true))
+  await ui.press({ key: 'settings-toggle' })
+  expect(await isOpen()).toBe(true)
+  await ui.redraw(focused(false))
+  await clock.advance(0)
+  expect(await isOpen()).toBe(false)
+})

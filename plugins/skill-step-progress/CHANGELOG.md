@@ -2,6 +2,16 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 — 2026-11-09
+
+### Added
+
+- **⚙ Settings in the Progress pane, with "Ask to track ad-hoc SOPs"** (on by default). Untick it, or its `/config` row, and Claude stops asking whether to track an ad-hoc SOP: the ask leaves the `pane` tool's description from the next turn. The popover closes on any press elsewhere, as prompt-toc's does.
+
+### Changed
+
+- The README spells out when the ad-hoc ask fires (3+ Bash steps, no `/skill` run, no saved flow, more than one command) and that it is Claude's call, not code.
+
 ## 0.6.0 — 2026-11-09
 
 ### Added

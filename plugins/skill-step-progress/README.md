@@ -55,7 +55,13 @@ You don't need to edit any file by hand:
 - **The pane's Rules view** (`◉ Rules` at the top of the pane) lists every flow with the reason any entry is skipped. Pause or Resume takes one press; Remove asks you to confirm.
 - **`/progress rules`** lists the flows in the chat and opens the Rules view. `/progress rules show|pause|resume|remove <name>` does the rest. The built-in `/commit` can be paused but not removed.
 
-**An ad-hoc SOP, without saving it.** When you lay out a procedure of a few steps in the chat (run the tests, build, deploy) that no flow covers, Claude asks before starting: show it in the pane for this run only (recommended), show it and save it as a flow, or leave it alone. The run-only choice goes through the `rules` tool's `run` action: the steps are checked and tracked like any flow, gone once the run ends, and never written to `rules.json`. Claude is told to ask by the description of the mod's `pane` tool, which it reads every turn.
+**An ad-hoc SOP, without saving it.** When you lay out a procedure in the chat that meets all of these, Claude asks once, before the first step:
+
+- 3 or more steps, run through Bash commands (tests → build → deploy is only an example: migrate → seed → restart counts too);
+- not a `/skill` run, and no saved flow already covers it;
+- more than a single command.
+
+The choices are: show it in the pane for this run only (recommended), show it and save it as a flow, or leave it alone. The run-only choice goes through the `rules` tool's `run` action: the steps are checked and tracked like any flow, gone once the run ends, and never written to `rules.json`. Claude is told to ask by the description of the mod's `pane` tool, which it reads every turn. No code detects such a procedure: whether one qualifies is Claude's call, so it can miss one (2 steps, non-Bash steps, an existing skill) or ask where you didn't expect. To stop the question, untick **Ask to track ad-hoc SOPs** under the pane's `⚙ Settings` (top right), or turn off its `/config` row. The setting is on by default, and the two places stay in sync.
 
 All three keep your flows in `~/.claude/skill-step-progress/rules.json` (on Windows, `%USERPROFILE%\.claude\skill-step-progress\rules.json`; with `CLAUDE_CONFIG_DIR` set, `$CLAUDE_CONFIG_DIR/skill-step-progress/rules.json`). The file is yours and never ships with the mod, so every user and machine keeps its own. Each key is a skill or command name; an entry named `commit` replaces the built-in one, and `"off": true` pauses an entry. The file is re-read each time a skill starts and after each edit. To edit it by hand, use the format below.
 

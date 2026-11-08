@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Commit, RuleRow, Step, StepStatus, Tracker } from '../types'
+import type { Commit, RuleRow, Settings, Step, StepStatus, Tracker } from '../types'
 import { buildTracker, fitText, parseOutline, textWidth } from './state-file'
 import type { Outline } from './state-file'
 import { listRules, pauseRule, removeRule, rowText, RULES_TOOL, runAction } from './rules-edit'
@@ -19,6 +19,19 @@ const view = atom({ plugin: 'skill-step-progress', key: 'view' } as const, 'runs
 const ruleRows = atom({ plugin: 'skill-step-progress', key: 'ruleRows' } as const, [])
 const confirming = atom({ plugin: 'skill-step-progress', key: 'confirming' } as const, '')
 
+// the ⚙ Settings popover's items, top to bottom (prompt-toc's settings.ts pattern). Each key is also its userConfig field
+// (the /config row), and every one starts on; a Record, so a setting added to the Settings type without an item fails to compile
+const LABELS: Record<keyof Settings, string> = { askAdhoc: 'Ask to track ad-hoc SOPs' }
+const KEYS = Object.keys(LABELS) as (keyof Settings)[]
+const LABEL_WIDTH = Math.max(...KEYS.map(k => LABELS[k].length))
+const loadSettings = (get: (key: string) => unknown) =>
+  Object.fromEntries(KEYS.map(k => [k, typeof get(k) === 'boolean' ? get(k) : true])) as Settings
+const settings = atom({ plugin: 'skill-step-progress', key: 'settings' } as const, loadSettings(() => undefined))
+const settingsOpen = atom({ plugin: 'skill-step-progress', key: 'settingsOpen' } as const, false)
+// the popover's click-catching layer (backdrop.ts), and the pane's last isFocused (a blur dismisses it)
+const BACKDROP = 'settings-backdrop'
+let wasFocused = false
+
 // /progress-open and /progress-close: tracking and the pane off for good (kept across sessions in $.store), like prompt-toc's
 const OFF = { plugin: 'skill-step-progress', key: 'isOff' } as const
 const OFF_NOTE = 'Progress is off (/progress-open to turn it on).'
@@ -31,6 +44,36 @@ const ASK_ADHOC =
   'Not for a single command or a procedure already tracked.'
 async function isOff($: EngineInterface) {
   return (await $.state.get(OFF)).value === true
+}
+// a name registered again is replaced: a flipped askAdhoc reaches the model's next turn without a reload
+async function registerPane($: EngineInterface) {
+  const { askAdhoc } = await read($, settings)
+  await $.tool.register({
+    name: 'pane',
+    description: "Open or close the Progress pane (this session's skill step progress) when the person asks to show or hide it." + (askAdhoc ? ASK_ADHOC : ''),
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['open', 'close'] } }, required: ['action'] },
+    isDeferred: false,
+  })
+}
+// close the settings popover on a press on, or focus moving to, anything but the gear or one of its toggles (focus
+// lands on the element being clicked first: closing then would let its press reopen it); prompt-toc's dismiss
+async function dismiss($: EngineInterface, key?: string) {
+  try {
+    const inPopover = key === 'settings-toggle' || key?.startsWith('setting-') === true
+    if (!inPopover && (await read($, settingsOpen))) await update($, settingsOpen, () => false)
+  } catch {}
+}
+// flip one setting, re-register what it shapes, and mirror it to its /config row so the menu shows the same value
+async function flip($: EngineInterface, key: keyof Settings) {
+  try {
+    const value = !(await read($, settings))[key]
+    await update($, settings, s => ({ ...s, [key]: value }))
+    if (key === 'askAdhoc') await registerPane($)
+    const { deny } = await $.config.set({ key: `${PANE}.${key}`, value })
+    if (deny) $.ui.toast(`skill-step-progress: ${deny}`)
+  } catch (err) {
+    $.ui.toast(`skill-step-progress: ${String(err)}`)
+  }
 }
 
 // name, description, argument hint
@@ -375,7 +418,7 @@ async function rulesCommand($: EngineInterface, rest: string) {
   return action && name && !extra ? runAction($, { action, name }) : USAGE
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
   // the engine loads one module per mod (hooks.json), so the step listener registers through this one
   listen(on)
   // One event for `/name`, the Skill tool and slash-command .md alike, with the skill already resolved.
@@ -417,14 +460,13 @@ export const register: Register = on => {
     try {
       if ((await $.store.get('isOff')) === true) await $.state.set(OFF, true)
     } catch {}
+    // the settings live in the plugin's userConfig (the /config rows); a change made there reloads this module with new options
+    try {
+      await update($, settings, () => loadSettings(k => options[k]))
+    } catch {}
     try {
       await $.tool.register(RULES_TOOL as never)
-      await $.tool.register({
-        name: 'pane',
-        description: "Open or close the Progress pane (this session's skill step progress) when the person asks to show or hide it." + ASK_ADHOC,
-        inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['open', 'close'] } }, required: ['action'] },
-        isDeferred: false,
-      })
+      await registerPane($)
     } catch {}
     const restored = await savedInvoked($)
     if (restored && (await read($, invoked)).length === 0) await update($, invoked, () => restored)
@@ -515,6 +557,20 @@ export const register: Register = on => {
 
   on('command.run', { command: `${PANE}-update` }, async $ => ({ text: await runUpdate($) }))
 
+  // the settings popover closes when the person goes elsewhere (see dismiss)
+  on('ui.press', { plugin: PANE, component: 'Pane', requestId: PANE }, async ($, e, next) => {
+    await dismiss($, e.element)
+    return next(e)
+  })
+  on('ui.focus', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
+    await dismiss($, e.element)
+    return next(e)
+  })
+  on('ui.message', { component: 'Pane', requestId: PANE, element: BACKDROP }, async ($, e, next) => {
+    await dismiss($)
+    return next(e)
+  })
+
   // natural-language open/close: the model calls mcp__skill-step-progress__pane (registered in session.start)
   on('tool.call', { tool: `mcp__${PANE}__pane` }, async ($, e) => {
     const isClose = (e as { action?: string }).action === 'close'
@@ -559,13 +615,22 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const elements = $.ui.resolve(e)
+    const { Box, Text, Button } = elements
+    // terminal + desktop only: elsewhere a blank-cell click leaves the popover open
+    const Client = 'Client' in elements ? elements.Client : undefined
     if (await isOff($)) return <Text dimColor>{OFF_NOTE}</Text>
     const list = await read($, trackers)
     const toggled = await read($, expanded)
     const cols = e.props.bodyColumns ?? e.viewport?.columns ?? 60
     const barWidth = Math.max(8, Math.min(32, cols - 18))
     const shown = await read($, view)
+    const prefs = await read($, settings)
+    const isSettingsOpen = await read($, settingsOpen)
+    // a click in the transcript or prompt raises nothing here but the pane losing focus; deferred, as a render hook's
+    // state write is refused
+    if (wasFocused && !e.props.isFocused) $.clock.after(0, () => void dismiss($))
+    wasFocused = e.props.isFocused
 
     // Runs | Rules: each side sets its view; the active one is bold with ◉, the same header in both views
     const side = (v: 'runs' | 'rules', label: string) => (
@@ -578,8 +643,29 @@ export const register: Register = on => {
         <Box flexDirection="row" gap={1} paddingX={1} marginBottom={1}>
           {side('runs', 'Runs')}
           {side('rules', 'Rules')}
+          <Box flexGrow={1} />
+          <Button key="settings-toggle" plain onPress={() => void update($, settingsOpen, open => !open)}>
+            <Text bold={isSettingsOpen}>⚙ Settings</Text>
+          </Button>
         </Box>
         {body as never}
+        {isSettingsOpen && Client && (
+          // under the popover: a blank cell holds no Button, so this layer catches that click (backdrop.ts) and dismisses.
+          // shortcut: 40 rows without a scroll window (a test mount); size it from the tree's rows if a pane ever lacks one
+          <Box position="absolute" top={0} left={0}>
+            <Client key={BACKDROP} module="./backdrop.ts" width={cols} height={e.props.scroll?.bodyRows ?? 40} />
+          </Box>
+        )}
+        {isSettingsOpen && (
+          // absolute under the gear, so unfolding it never reflows the runs
+          <Box position="absolute" top={1} right={1} flexDirection="column" backgroundColor="userMessageBackground">
+            {KEYS.map(key => (
+              <Button key={`setting-${key}`} plain onPress={() => void flip($, key)}>
+                {' '}{prefs[key] ? <Text color="claude">[x]</Text> : '[ ]'}{` ${LABELS[key].padEnd(LABEL_WIDTH)} `}
+              </Button>
+            ))}
+          </Box>
+        )}
       </Box>
     )
 

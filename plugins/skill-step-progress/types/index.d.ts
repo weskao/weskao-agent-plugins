@@ -103,6 +103,12 @@ export type SavedRun = {
   idle: number
 }
 
+/** the pane's ⚙ Settings; every one starts on */
+export type Settings = {
+  /** the pane tool's description tells the model to ask (AskUserQuestion) before tracking an ad-hoc 3+ step Bash SOP */
+  askAdhoc: boolean
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'skill-step-progress': {
@@ -120,6 +126,9 @@ declare module 'claude-code' {
       isOff: boolean
       /** the listener's runs in flight, kept across /reload-plugins; never written before 0.3.3, so read as none */
       runs: SavedRun[]
+      /** the ⚙ Settings popover's toggles (each also a userConfig field, the /config row) and whether it is open */
+      settings: Settings
+      settingsOpen: boolean
     }
   }
 }
