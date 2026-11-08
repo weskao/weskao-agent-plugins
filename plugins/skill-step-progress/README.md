@@ -2,7 +2,11 @@
 
 A live pane beside the chat that shows the current step and overall progress of this session's flows, one box per run, with the run's total time, each step's time and the commits a run made.
 
-![The Progress pane during a /commit run](screenshots/progress-commit-running.jpeg?v=3)
+![The Progress pane during a /commit run](screenshots/progress-commit-running.jpeg?v=5)
+
+![Demo: a /commit run moves from Commit batches to Verify to finished, then ⚙ Settings toggles Ask to track ad-hoc SOPs off and on](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/progress-demo.gif)
+
+https://github.com/user-attachments/assets/5c722616-bf3e-4519-9e3c-a60b8c9db60c
 
 ## Install
 
@@ -26,26 +30,26 @@ Needs Claude Code 2.1.287 or later (mods load by default) and `git` on `PATH`. W
 | `/progress-time` | Each run's total time and its steps' times, as text |
 | `/progress-update` | Same as `/skill-step-progress-update` |
 
-![/progress history listing a finished /commit run](screenshots/progress-history.jpeg?v=2)
+![/progress history listing a finished /commit run](screenshots/progress-history.jpeg?v=4)
 
 It shows two kinds of runs:
 
 - **Watched flows**: `/commit` is built in. The mod follows the commands it runs (`git add` / `git commit` → Commit batches, `git log` → Verify) and lists the commits it made, so the skill itself carries no progress calls. Commits made in another work tree count too, when the step names it (`git -C <dir>`, or `cd <dir> && …` in the same command). A sub-agent's run, such as a `/commit` a sub-agent makes, gets its own box labeled `sub-agent <id>` and ends with that sub-agent. A watched run is followed by the process that started it: one left behind by a crash, `--resume` or `/reload-plugins` mid-run is archived as abandoned ("left by an earlier process") rather than shown in progress for the rest of the session.
 - **Skills that write their own state** to `~/.claude/usage-data/<skill>/<repo>/current.json` (under `CLAUDE_CONFIG_DIR` when set; archived under `history/`). The shape is `StateFileContract` in [`types/index.d.ts`](types/index.d.ts). A skill whose folder has its own name needs no setup. A command whose folder is named differently (`/orch:task` writing `orch-task`) gets a state flow in your rules file (see below).
 
-![The Progress pane with two runs at once: /deploy expanded and /migrate-db collapsed, one box per run](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/progress-multi-runs.jpeg)
+![The Progress pane with two runs at once: /deploy expanded and /migrate-db collapsed, one box per run](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/progress-multi-runs.jpeg?v=2)
 
 A `/commit` run from start to finish, then its box once it is done:
 
 https://github.com/user-attachments/assets/6a8df983-44b6-4204-a9e2-a4ad8426135e
 
-![A finished /commit run with its commits and each step's time](screenshots/progress-commit-finished.jpeg?v=3)
+![A finished /commit run with its commits and each step's time](screenshots/progress-commit-finished.jpeg?v=5)
 
 ## Update
 
 When a newer version is published, a toast says so at session start (checked at most once every 10 minutes). Run `/skill-step-progress-update` to update, then restart Claude Code.
 
-![The update toast: skill-step-progress 0.4.0 is available: run /skill-step-progress-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/update-toast-skill-step-progress.jpeg)
+![The update toast: skill-step-progress 0.7.0 is available: run /skill-step-progress-update](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/update-toast-skill-step-progress.jpeg?v=2)
 
 ## Add your own flows
 
@@ -56,6 +60,8 @@ You don't need to edit any file by hand:
 - **`/progress rules`** lists the flows in the chat and opens the Rules view. `/progress rules show|pause|resume|remove <name>` does the rest. The built-in `/commit` can be paused but not removed.
 
 **An ad-hoc SOP, without saving it.** When you lay out a procedure in the chat that meets all of these, Claude asks once, before the first step:
+
+![The Progress pane's ⚙ Settings popover with Ask to track ad-hoc SOPs ticked](https://raw.githubusercontent.com/weskao/weskao-agent-plugins/main/assets/skill-step-progress/progress-settings.jpeg)
 
 - 3 or more steps, run through Bash commands (tests → build → deploy is only an example: migrate → seed → restart counts too);
 - not a `/skill` run, and no saved flow already covers it;
