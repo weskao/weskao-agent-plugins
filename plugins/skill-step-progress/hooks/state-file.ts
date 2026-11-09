@@ -231,3 +231,8 @@ export function buildTracker(
     idleDays: Number.isNaN(updatedMs) ? 0 : Math.floor((nowMs - updatedMs) / 86_400_000),
   }
 }
+
+/** Branch name from a `.git/HEAD` file (`ref: refs/heads/<name>`); null when detached. */
+export function parseHeadBranch(head: string): string | null {
+  return head.match(/^ref:\s*refs\/heads\/(.+?)\s*$/m)?.[1] ?? null
+}

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Commit, RuleRow, Settings, Step, StepStatus, Tracker } from '../types'
-import { buildTracker, fitText, parseOutline, textWidth } from './state-file'
+import { buildTracker, fitText, parseHeadBranch, parseOutline, textWidth } from './state-file'
 import type { Outline } from './state-file'
 import { listRules, pauseRule, removeRule, rowText, RULES_TOOL, runAction } from './rules-edit'
 import type { RuleInput } from './rules-edit'
@@ -248,10 +248,40 @@ async function scan($: EngineInterface, skills: string[]): Promise<Tracker[]> {
   return found.sort((a, b) => skills.indexOf(b.skill) - skills.indexOf(a.skill))
 }
 
+// Skills whose state file names the checked-out branch (`"branch"` key): shown without having been run in this session.
+// shortcut: reads `<root>/.git/HEAD` (or a worktree's `gitdir:` pointer) and every current.json each poll; cheap at ~15
+// usage-data dirs, cache by mtime if that grows.
+async function branchSkills($: EngineInterface): Promise<string[]> {
+  const root = await $.session.root()
+  let headPath = `${root}/.git/HEAD`
+  try {
+    const ptr = (await $.fs.read(`${root}/.git`)).match(/^gitdir:\s*(.+?)\s*$/m)?.[1]
+    if (ptr) headPath = `${ptr}/HEAD`
+  } catch {
+    // `.git` is a directory: HEAD sits inside it
+  }
+  const branch = parseHeadBranch(await $.fs.read(headPath).catch(() => ''))
+  if (!branch) return []
+  const base = await usageBase($)
+  const dirs = async (p: string) => (await listDir($, p)).filter(d => d.kind === 'dir')
+  const hits: string[] = []
+  for (const skill of await dirs(base)) {
+    for (const repo of await dirs(`${base}/${skill.name}`)) {
+      if ((await readState($, `${base}/${skill.name}/${repo.name}/current.json`))?.json.branch === branch) {
+        hits.push(skill.name)
+        break
+      }
+    }
+  }
+  return hits.sort()
+}
+
 // `skills` is passed by a caller that just wrote `invoked`: reads within one dispatch still see the old value.
-async function refresh($: EngineInterface, skills?: string[]) {
+async function refresh($: EngineInterface, skillsArg?: string[]) {
   if (await isOff($)) return
-  skills ??= await read($, invoked)
+  const invokedList = skillsArg ?? (await read($, invoked))
+  // Branch-bound SOPs go first: the scan lists later entries first, so a skill run here still leads the pane.
+  const skills = [...(await branchSkills($)).filter(s => !invokedList.includes(s)), ...invokedList]
   const prev = await read($, trackers)
   // Emptied by `/progress forget`: clear here too, so a poll that scanned the old list cannot leave a tracker behind.
   if (skills.length === 0) {
@@ -814,7 +844,8 @@ export const register: Register = (on, options) => {
     return withHeader(
       <Box flexDirection="column" gap={1}>
         {list.map(t => {
-          const isOpen = toggled[t.key] ?? t.key === list[0]?.key
+          // two side by side (a branch's paired SOPs) both open; past that only the newest, so the pane stays short
+          const isOpen = toggled[t.key] ?? (list.length <= 2 || t.key === list[0]?.key)
           // Clamped like `filled` below: a negative or overshot total must not print -100% or 300%.
           const pct = t.total ? Math.min(100, Math.max(0, Math.round((t.done / t.total) * 100))) : null
           // Clamped: a done count above its total must not hand `repeat` a negative count and blank the whole pane.

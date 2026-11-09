@@ -2,6 +2,13 @@
 
 All notable changes to skill-step-progress. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.1 — 2026-11-09
+
+### Fixed
+
+- **A SOP bound to the checked-out branch now shows in the Progress pane** without having been run in this session. Its state file names the branch (`"branch"` key); the pane reads `.git/HEAD` (or a worktree's `gitdir:` pointer) each poll.
+- Two runs side by side (a branch's paired SOPs) both start open; past two, only the newest does.
+
 ## 0.7.0 — 2026-11-09
 
 ### Added

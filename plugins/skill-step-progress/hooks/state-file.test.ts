@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { apportion, buildTracker, fitText, parseOutline } from './state-file'
+import { apportion, buildTracker, fitText, parseHeadBranch, parseOutline } from './state-file'
 
 const MD = `
 **\`TOTAL_STEPS = 5\`**
@@ -289,4 +289,9 @@ test("the main steps' times add up to the total and their shares to 100%, howeve
   expect(main.reduce((sum, s) => sum + (s.pct ?? 0), 0)).toBe(100)
   // the sub-step is inside step 2: not part of the total or the 100%
   expect(t?.steps.find(s => s.id === '2.1')?.pct).toBe(10)
+})
+
+test('parseHeadBranch reads a branch ref, null when detached', () => {
+  expect(parseHeadBranch('ref: refs/heads/feature/SPORTS-716-x\n')).toBe('feature/SPORTS-716-x')
+  expect(parseHeadBranch('49e9f60688aa\n')).toBeNull()
 })

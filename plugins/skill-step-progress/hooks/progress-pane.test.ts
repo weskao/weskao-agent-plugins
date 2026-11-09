@@ -633,6 +633,34 @@ test('/commit and /push show only this session\'s runs from the temp folder, not
 
 test('a run header toggles its own box open or closed, and several can be open at once', async ($, on) => {
   const run = JSON.stringify({ status: 'in_progress', current_step: '1', total_steps: 1, steps: { '1': { status: 'in_progress', title: 'Go' } } })
+  const skills = ['tog-a', 'tog-b', 'tog-c']
+  for (const s of skills) STATE[`${BASE}/${s}/repo/current.json`] = run
+  fakeHost(on, {})
+  const clock = mock.clock(on)
+
+  const ui = await $.ui.mount({ ...pane, props })
+  for (const s of skills) await $.skill.prompt({ skill: s, text: 'go' })
+  await clock.settle()
+  const isOpen = async (skill: string) => (await ui.find({ text: new RegExp(`^▾ ${skill}`) })) !== undefined
+  const states = async () => Promise.all(skills.map(isOpen))
+  // past two runs only the newest starts open
+  const first = await states()
+  expect(first.filter(Boolean)).toHaveLength(1)
+  // each press flips only its own box
+  await ui.press({ key: 'h:tog-a/repo' })
+  expect(await states()).toEqual([!first[0], first[1], first[2]])
+  await ui.press({ key: 'h:tog-b/repo' })
+  expect(await states()).toEqual([!first[0], !first[1], first[2]])
+  await ui.press({ key: 'h:tog-c/repo' })
+  expect(await states()).toEqual(first.map(o => !o))
+  // the box that started open is closed now; reopening it leaves all open
+  await ui.press({ key: `h:${skills[first.indexOf(true)]}/repo` })
+  expect(await states()).toEqual([true, true, true])
+})
+
+// two side by side (a branch's paired SOPs) both start open
+test('two runs both start open', async ($, on) => {
+  const run = JSON.stringify({ status: 'in_progress', current_step: '1', total_steps: 1, steps: { '1': { status: 'in_progress', title: 'Go' } } })
   STATE[`${BASE}/sop-a/repo/current.json`] = run
   STATE[`${BASE}/sop-b/repo/current.json`] = run
   fakeHost(on, {})
@@ -642,18 +670,8 @@ test('a run header toggles its own box open or closed, and several can be open a
   await $.skill.prompt({ skill: 'sop-a', text: 'go' })
   await $.skill.prompt({ skill: 'sop-b', text: 'go' })
   await clock.settle()
-  const isOpen = async (skill: string) => (await ui.find({ text: new RegExp(`^▾ ${skill}`) })) !== undefined
-  const states = async () => [await isOpen('sop-a'), await isOpen('sop-b')]
-  const first = await states()
-  expect(first.filter(Boolean)).toHaveLength(1)
-  // each press flips only its own box
-  await ui.press({ key: 'h:sop-a/repo' })
-  expect(await states()).toEqual([!first[0], first[1]])
-  await ui.press({ key: 'h:sop-b/repo' })
-  expect(await states()).toEqual([!first[0], !first[1]])
-  // the box that started open is closed now; reopening it leaves both open
-  await ui.press({ key: first[0] ? 'h:sop-a/repo' : 'h:sop-b/repo' })
-  expect(await states()).toEqual([true, true])
+  expect(await ui.find({ text: /^▾ sop-a/ })).toBeDefined()
+  expect(await ui.find({ text: /^▾ sop-b/ })).toBeDefined()
 })
 
 // A crash, `--resume` or /reload-plugins mid-run leaves a listener run in progress that no process follows: the pane

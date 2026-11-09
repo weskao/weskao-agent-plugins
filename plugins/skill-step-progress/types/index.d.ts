@@ -66,6 +66,8 @@ export type StateFileContract = {
   steps: Record<string, string | { status: string; title?: string; started_at?: string; ended_at?: string }>
   started_at?: string
   updated_at?: string
+  /** git branch this run belongs to: the pane lists it, without a skill run, while that branch is checked out */
+  branch?: string
   /** optional one-liner, shown in the label after the id (the label is cut at 48 chars; empty string is skipped) */
   note?: string
   /** step-progress.py `commits` (or the listener's state-writer.ts): the run's own commits, listed under the last step */
